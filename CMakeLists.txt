@@ -41,6 +41,8 @@ c4_add_library(ryml
         c4/yml/node.cpp
         c4/yml/parse.hpp
         c4/yml/parse.cpp
+        c4/yml/parser_events.hpp
+        c4/yml/parser_tree.hpp
         c4/yml/preprocess.hpp
         c4/yml/preprocess.cpp
         c4/yml/std/map.hpp
