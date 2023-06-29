@@ -20,6 +20,7 @@ struct NewParser // : public ParserEvents<NewParser, NewParserStackState>
     static constexpr const bool is_wtree = !is_events;
     using state = NewParserStackState;
     using state_ref = state& C4_RESTRICT;
+    using state_cref = state const& C4_RESTRICT;
 
     Tree *m_tree; // for wtree
     Sink *m_sink; // for events
@@ -30,7 +31,7 @@ struct NewParser // : public ParserEvents<NewParser, NewParserStackState>
 
 public:
 
-    NewParser(Tree *t) : m_tree(t), m_sink()
+    NewParser(Tree *tree) : m_tree(tree), m_sink()
     {
         if constexpr (is_wtree)
         {
@@ -50,14 +51,11 @@ public:
 
     void _send_(csubstr s) { (*m_sink)(s); }
     void _send_(char c) { (*m_sink)(c); }
-
     void _enable_(type_bits bits)
     {
-        m_curr.data->m_type.type = (NodeType_e)(m_curr.data->m_type.type|bits);
+        m_curr.data->m_type.type = static_cast<NodeType_e>(m_curr.data->m_type.type|bits);
     }
-public:
-
-    void _add()
+    void _add_()
     {
         if constexpr (is_wtree)
         {
@@ -65,7 +63,45 @@ public:
             m_curr.data = m_tree->_p(m_curr.id);
         }
     }
-    void _push(state_ref st)
+
+    void _send_key_props_()
+    {
+        if(m_curr.data->m_type.type & (KEYANCH|KEYREF))
+        {
+            _send_('&');
+            _send_(m_curr.data->m_key.anchor);
+        }
+    }
+    void _send_val_props_()
+    {
+        if(m_curr.data->m_type.type & (VALANCH|VALREF))
+        {
+            _send_('&');
+            _send_(m_curr.data->m_val.anchor);
+        }
+    }
+
+    void _send_key_scalar_(csubstr s, char type)
+    {
+        _send_("=VAL ");
+        _send_key_props_();
+        _send_(type);
+        _send_(s);
+        _send_('\n');
+    }
+
+    void _send_val_scalar_(csubstr s, char type)
+    {
+        _send_("=VAL ");
+        _send_val_props_();
+        _send_(type);
+        _send_(s);
+        _send_('\n');
+    }
+
+public:
+
+    void _push_(state_ref st)
     {
         if constexpr (is_wtree)
         {
@@ -74,11 +110,13 @@ public:
             m_parent = &st;
         }
     }
-    void _pop(state_ref st)
+    void _pop_(state_cref st)
     {
         if constexpr (is_wtree)
             m_parent = &st;
     }
+
+public:
 
     void _begin_stream()
     {
@@ -152,22 +190,7 @@ public:
         m_curr.data->m_val.anchor = ref;
     }
 
-    void _send_key_props_()
-    {
-        if(m_curr.data->m_type.type & (KEYANCH|KEYREF))
-        {
-            _send_('&');
-            _send_(m_curr.data->m_key.anchor);
-        }
-    }
-    void _send_val_props_()
-    {
-        if(m_curr.data->m_type.type & (VALANCH|VALREF))
-        {
-            _send_('&');
-            _send_(m_curr.data->m_val.anchor);
-        }
-    }
+public:
 
     void _begin_map_key_flow()
     {
@@ -225,8 +248,10 @@ public:
     {
         if constexpr (is_events)
             _send_("-MAP\n");
-        _add();
+        _add_();
     }
+
+public:
 
     void _begin_seq_key_flow()
     {
@@ -284,26 +309,10 @@ public:
     {
         if constexpr (is_events)
             _send_("-SEQ\n");
-        _add();
+        _add_();
     }
 
-    void _send_key_scalar_(csubstr s, char type)
-    {
-        _send_("=VAL ");
-        _send_key_props_();
-        _send_(type);
-        _send_(s);
-        _send_('\n');
-    }
-
-    void _send_val_scalar_(csubstr s, char type)
-    {
-        _send_("=VAL ");
-        _send_val_props_();
-        _send_(type);
-        _send_(s);
-        _send_('\n');
-    }
+public:
 
     void _add_key_scalar_plain(csubstr unfiltered)
     {
@@ -327,7 +336,7 @@ public:
         {
             m_curr.data->m_val.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_PLAIN);
-            _add();
+            _add_();
         }
     }
 
@@ -353,7 +362,7 @@ public:
         {
             m_curr.data->m_val.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_DQUO);
-            _add();
+            _add_();
         }
     }
 
@@ -379,7 +388,7 @@ public:
         {
             m_curr.data->m_val.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_SQUO);
-            _add();
+            _add_();
         }
     }
 
@@ -405,7 +414,7 @@ public:
         {
             m_curr.data->m_key.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_LITERAL);
-            _add();
+            _add_();
         }
     }
 
@@ -431,7 +440,7 @@ public:
         {
             m_curr.data->m_key.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_FOLDED);
-            _add();
+            _add_();
         }
     }
 };

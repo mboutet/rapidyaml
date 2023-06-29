@@ -65,6 +65,9 @@ TEST(NewParser, name##_wtree)                   \
     test_new_parser_wtree<name>(yaml);          \
 }
 
+
+//-----------------------------------------------------------------------------
+
 PSTEST(Foo,
        "{foo: bar}",
         R"(+STR
