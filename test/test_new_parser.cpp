@@ -41,6 +41,7 @@ void test_new_parser_wtree(std::string yaml)
     fn(ps);
     print_tree(t);
     std::string result = emitrs_yaml<std::string>(t);
+    printf("~~~\n%s~~~\n", result.c_str());
     EXPECT_EQ(result, yaml);
 }
 
@@ -66,27 +67,148 @@ TEST(NewParser, name##_wtree)                   \
 }
 
 
+#define ___                                                             \
+    do                                                                  \
+    {                                                                   \
+       if(ps.is_wtree)                                                  \
+       {                                                                \
+           printf("%s:%d: parent.id=%zu curr.id=%zu\n",                 \
+                  __FILE__, __LINE__, ps.m_parent->id, ps.m_curr.id);   \
+       }                                                                \
+    } while(0);
+
+
 //-----------------------------------------------------------------------------
 
-PSTEST(Foo,
-       "{foo: bar}",
+PSTEST(SimpleScalar,
+       "foo\n",
+        R"(+STR
++DOC
+=VAL :foo
+-DOC
+-STR
+)",
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._add_val_scalar_plain("foo");     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SimpleMapFlow,
+       "{foo: bar, foo2: bar2}",
         R"(+STR
 +DOC
 +MAP {}
 =VAL :foo
 =VAL :bar
+=VAL :foo2
+=VAL :bar2
 -MAP
 -DOC
 -STR
 )",
-       ps._begin_stream();
-       ps._begin_doc();
-       ps._begin_map_val_flow();
-       ps._add_key_scalar_plain("foo");
-       ps._add_val_scalar_plain("bar");
-       ps._end_map();
-       ps._end_doc();
-       ps._end_stream();
+       PsTree::state st_map;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_map_val_flow(st_map);     ___
+       ps._add_key_scalar_plain("foo");     ___
+       ps._add_val_scalar_plain("bar");     ___
+       ps._add_key_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SimpleMapBlock,
+       "foo: bar\nfoo2: bar2\nfoo3: bar3\n",
+       R"(+STR
++DOC
++MAP
+=VAL :foo
+=VAL :bar
+=VAL :foo2
+=VAL :bar2
+=VAL :foo3
+=VAL :bar3
+-MAP
+-DOC
+-STR
+)",
+       PsTree::state st_map;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_map_val_block(st_map);     ___
+       ps._add_key_scalar_plain("foo");     ___
+       ps._add_val_scalar_plain("bar");     ___
+       ps._add_key_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._add_key_scalar_plain("foo3");     ___
+       ps._add_val_scalar_plain("bar3");     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SimpleSeqFlow,
+       "[foo, bar, baz]",
+        R"(+STR
++DOC
++SEQ []
+=VAL :foo
+=VAL :bar
+=VAL :baz
+-MAP
+-DOC
+-STR
+)",
+       PsTree::state st_seq;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_seq_val_flow(st_seq);     ___
+       ps._add_val_scalar_plain("foo");     ___
+       ps._add_val_scalar_plain("bar");     ___
+       ps._add_val_scalar_plain("baz");     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SimpleSeqBlock,
+       "- foo\n- bar\n- baz\n",
+        R"(+STR
++DOC
++SEQ
+=VAL :foo
+=VAL :bar
+=VAL :baz
+-MAP
+-DOC
+-STR
+)",
+       PsTree::state st_seq;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_seq_val_block(st_seq);     ___
+       ps._add_val_scalar_plain("foo");     ___
+       ps._add_val_scalar_plain("bar");     ___
+       ps._add_val_scalar_plain("baz");     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
     )
 
 } // namespace yml

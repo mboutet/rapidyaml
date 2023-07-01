@@ -22,8 +22,8 @@ struct NewParser // : public ParserEvents<NewParser, NewParserStackState>
     using state_ref = state& C4_RESTRICT;
     using state_cref = state const& C4_RESTRICT;
 
-    Tree *m_tree; // for wtree
-    Sink *m_sink; // for events
+    Tree *m_tree; // use only for wtree
+    Sink *m_sink; // use only for events
 
     state const* C4_RESTRICT m_parent;
     state m_curr;
@@ -54,14 +54,6 @@ public:
     void _enable_(type_bits bits)
     {
         m_curr.data->m_type.type = static_cast<NodeType_e>(m_curr.data->m_type.type|bits);
-    }
-    void _add_()
-    {
-        if constexpr (is_wtree)
-        {
-            m_curr.id = m_tree->append_child(m_parent->id);
-            m_curr.data = m_tree->_p(m_curr.id);
-        }
     }
 
     void _send_key_props_()
@@ -101,19 +93,37 @@ public:
 
 public:
 
-    void _push_(state_ref st)
+    void _push_(state_ref dst)
     {
         if constexpr (is_wtree)
         {
-            st.id = m_tree->append_child(m_parent->id);
-            st.data = m_tree->_p(st.id);
-            m_parent = &st;
+            dst.id = m_tree->append_child(m_parent->id);
+            dst.data = m_tree->_p(dst.id);
+            m_parent = &dst;
         }
     }
-    void _pop_(state_cref st)
+    void _pop_(state_cref parent)
     {
         if constexpr (is_wtree)
-            m_parent = &st;
+            m_parent = &parent;
+    }
+    void _add_()
+    {
+        if constexpr (is_wtree)
+        {
+            m_curr.id = m_tree->append_child(m_parent->id);
+            m_curr.data = m_tree->_p(m_curr.id);
+        }
+    }
+    void _add_(state_ref dst)
+    {
+        if constexpr (is_wtree)
+        {
+            dst = *m_parent;
+            m_parent = &dst;
+            m_curr.id = m_tree->append_child(m_parent->id);
+            m_curr.data = m_tree->_p(m_curr.id);
+        }
     }
 
 public:
@@ -157,42 +167,9 @@ public:
             _send_("-DOC\n");
     }
 
-    void _add_key_tag(csubstr tag)
-    {
-        _enable_(KEYTAG);
-        m_curr.data->m_key.tag = tag;
-    }
-    void _add_val_tag(csubstr tag)
-    {
-        _enable_(VALTAG);
-        m_curr.data->m_val.tag = tag;
-    }
-
-    void _add_key_anchor(csubstr anchor)
-    {
-        _enable_(KEYANCH);
-        m_curr.data->m_key.anchor = anchor;
-    }
-    void _add_val_anchor(csubstr anchor)
-    {
-        _enable_(VALANCH);
-        m_curr.data->m_val.anchor = anchor;
-    }
-
-    void _add_key_ref(csubstr ref)
-    {
-        _enable_(KEYREF);
-        m_curr.data->m_key.anchor = ref;
-    }
-    void _add_val_ref(csubstr ref)
-    {
-        _enable_(VALREF);
-        m_curr.data->m_val.anchor = ref;
-    }
-
 public:
 
-    void _begin_map_key_flow()
+    void _begin_map_key_flow(state_ref)
     {
         if constexpr (is_events)
         {
@@ -205,7 +182,7 @@ public:
             C4_NOT_IMPLEMENTED();
         }
     }
-    void _begin_map_key_block()
+    void _begin_map_key_block(state_ref)
     {
         if constexpr (is_events)
         {
@@ -218,7 +195,7 @@ public:
             C4_NOT_IMPLEMENTED();
         }
     }
-    void _begin_map_val_flow()
+    void _begin_map_val_flow(state_ref st)
     {
         if constexpr (is_events)
         {
@@ -229,9 +206,10 @@ public:
         else
         {
             _enable_(MAP|_WIP_STYLE_FLOW_SL);
+            _add_(st);
         }
     }
-    void _begin_map_val_block()
+    void _begin_map_val_block(state_ref st)
     {
         if constexpr (is_events)
         {
@@ -242,13 +220,13 @@ public:
         else
         {
             _enable_(MAP|_WIP_STYLE_BLOCK);
+            _add_(st);
         }
     }
     void _end_map()
     {
         if constexpr (is_events)
             _send_("-MAP\n");
-        _add_();
     }
 
 public:
@@ -279,20 +257,21 @@ public:
             C4_NOT_IMPLEMENTED();
         }
     }
-    void _begin_seq_val_flow()
+    void _begin_seq_val_flow(state_ref st)
     {
         if constexpr (is_events)
         {
-            _send_("+SEQ");
+            _send_("+SEQ []");
             _send_val_props_();
             _send_('\n');
         }
         else
         {
             _enable_(SEQ|_WIP_STYLE_FLOW_SL);
+            _add_(st);
         }
     }
-    void _begin_seq_val_block()
+    void _begin_seq_val_block(state_ref st)
     {
         if constexpr (is_events)
         {
@@ -303,13 +282,13 @@ public:
         else
         {
             _enable_(SEQ|_WIP_STYLE_BLOCK);
+            _add_(st);
         }
     }
     void _end_seq()
     {
         if constexpr (is_events)
             _send_("-SEQ\n");
-        _add_();
     }
 
 public:
@@ -442,6 +421,41 @@ public:
             _enable_(VAL|_WIP_VAL_FOLDED);
             _add_();
         }
+    }
+
+public:
+
+    void _add_key_tag(csubstr tag)
+    {
+        _enable_(KEYTAG);
+        m_curr.data->m_key.tag = tag;
+    }
+    void _add_val_tag(csubstr tag)
+    {
+        _enable_(VALTAG);
+        m_curr.data->m_val.tag = tag;
+    }
+
+    void _add_key_anchor(csubstr anchor)
+    {
+        _enable_(KEYANCH);
+        m_curr.data->m_key.anchor = anchor;
+    }
+    void _add_val_anchor(csubstr anchor)
+    {
+        _enable_(VALANCH);
+        m_curr.data->m_val.anchor = anchor;
+    }
+
+    void _add_key_ref(csubstr ref)
+    {
+        _enable_(KEYREF);
+        m_curr.data->m_key.anchor = ref;
+    }
+    void _add_val_ref(csubstr ref)
+    {
+        _enable_(VALREF);
+        m_curr.data->m_val.anchor = ref;
     }
 };
 
