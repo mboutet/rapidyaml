@@ -7,8 +7,8 @@
 #include "c4/yml/detail/print.hpp"
 #endif
 #include <gtest/gtest.h>
-#include "./callbacks_tester.hpp"
 
+#define RYML_DBG
 
 namespace c4 {
 namespace yml {
@@ -24,40 +24,48 @@ using PsEvents = NewParser<true, EventSink>;
 using PsTree = NewParser<false, EventSink>;
 
 template<template<class> class Fn>
-void test_new_parser_events(std::string events)
+void test_new_parser_events(std::string const& expected)
 {
     EventSink sink;
     PsEvents ps(&sink);
     Fn<PsEvents> fn;
     fn(ps);
-    EXPECT_EQ(sink.result, events);
+    EXPECT_EQ(sink.result, expected);
 }
 
 template<template<class> class Fn>
-void test_new_parser_wtree(std::string yaml)
+void test_new_parser_wtree(std::string const& expected)
 {
     Tree t = {};
     PsTree ps(&t);
     Fn<PsTree> fn;
     fn(ps);
+    #ifdef RYML_DBG
     print_tree(t);
-    std::string result = emitrs_yaml<std::string>(t);
-    printf("~~~\n%s~~~\n", result.c_str());
-    EXPECT_EQ(result, yaml);
+    #endif
+    std::string actual = emitrs_yaml<std::string>(t);
+    #ifdef RYML_DBG
+    printf("~~~\n%s~~~\n", actual.c_str());
+    #endif
+    EXPECT_EQ(actual, expected);
 }
 
 
 //-----------------------------------------------------------------------------
 
-#define PSTEST(name, yaml, events, ...)         \
+#define PSTEST(name, yaml, events)              \
+template<class Ps>                              \
+void name##_impl(Ps &ps);                       \
+                                                \
 template<class Ps>                              \
 struct name                                     \
 {                                               \
     void operator() (Ps &ps)                    \
     {                                           \
-        __VA_ARGS__                             \
+        name##_impl(ps);                        \
     }                                           \
 };                                              \
+                                                \
 TEST(NewParser, name##_events)                  \
 {                                               \
     test_new_parser_events<name>(events);       \
@@ -65,37 +73,122 @@ TEST(NewParser, name##_events)                  \
 TEST(NewParser, name##_wtree)                   \
 {                                               \
     test_new_parser_wtree<name>(yaml);          \
-}
-
-
-#define ___                                                             \
-    do                                                                  \
-    {                                                                   \
-       if(ps.is_wtree)                                                  \
-       {                                                                \
-           printf("%s:%d: parent.id=%zu curr.id=%zu\n",                 \
-                  __FILE__, __LINE__, ps.m_parent->id, ps.m_curr.id);   \
-       }                                                                \
-    } while(0);
+}                                               \
+                                                \
+template<class Ps>                              \
+void name##_impl(Ps &ps)
 
 
 //-----------------------------------------------------------------------------
 
-PSTEST(SimpleScalar,
+#ifndef RYML_DBG
+#define ___(stmt) stmt
+#else
+#define ___(stmt)                                                       \
+    do                                                                  \
+    {                                                                   \
+       stmt;                                                            \
+       if(ps.is_wtree)                                                  \
+       {                                                                \
+           printf("%s:%d: parent.id=%zu curr.id=%zu  " #stmt "\n",      \
+                  __FILE__, __LINE__, ps.m_parent->id, ps.m_curr.id);   \
+       }                                                                \
+    } while(0);
+#endif
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocScalarPlain,
        "foo\n",
         R"(+STR
 +DOC
 =VAL :foo
 -DOC
 -STR
-)",
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._add_val_scalar_plain("foo");     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_scalar_plain("foo");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocScalarSQuoted,
+       "'foo'\n",
+        R"(+STR
++DOC
+=VAL 'foo
+-DOC
+-STR
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_scalar_squoted("foo");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocScalarDQuoted,
+       "\"foo\"\n",
+        R"(+STR
++DOC
+=VAL "foo
+-DOC
+-STR
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_scalar_dquoted("foo");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocScalarLiteral,
+       "|-\n  foo\n",
+        R"(+STR
++DOC
+=VAL |foo
+-DOC
+-STR
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_scalar_literal("foo");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocScalarFolded,
+       ">-\n  foo\n",
+        R"(+STR
++DOC
+=VAL >foo
+-DOC
+-STR
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_scalar_folded("foo");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 //-----------------------------------------------------------------------------
 
@@ -111,19 +204,20 @@ PSTEST(SimpleMapFlow,
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_map;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_map_val_flow(st_map);     ___
-       ps._add_key_scalar_plain("foo");     ___
-       ps._add_val_scalar_plain("bar");     ___
-       ps._add_key_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_map_val_flow(st_map);)
+    ___(ps._add_key_scalar_plain("foo");)
+    ___(ps._add_val_scalar_plain("bar");)
+    ___(ps._add_key_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
@@ -142,21 +236,22 @@ PSTEST(SimpleMapBlock,
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_map;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_map_val_block(st_map);     ___
-       ps._add_key_scalar_plain("foo");     ___
-       ps._add_val_scalar_plain("bar");     ___
-       ps._add_key_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._add_key_scalar_plain("foo3");     ___
-       ps._add_val_scalar_plain("bar3");     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_map_val_block(st_map);)
+    ___(ps._add_key_scalar_plain("foo");)
+    ___(ps._add_val_scalar_plain("bar");)
+    ___(ps._add_key_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._add_key_scalar_plain("foo3");)
+    ___(ps._add_val_scalar_plain("bar3");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
@@ -172,18 +267,19 @@ PSTEST(SimpleSeqFlow,
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_seq;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_seq_val_flow(st_seq);     ___
-       ps._add_val_scalar_plain("foo");     ___
-       ps._add_val_scalar_plain("bar");     ___
-       ps._add_val_scalar_plain("baz");     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_seq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_seq_val_flow(st_seq);)
+    ___(ps._add_val_scalar_plain("foo");)
+    ___(ps._add_val_scalar_plain("bar");)
+    ___(ps._add_val_scalar_plain("baz");)
+    ___(ps._end_map(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
@@ -199,24 +295,25 @@ PSTEST(SimpleSeqBlock,
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_seq;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_seq_val_block(st_seq);     ___
-       ps._add_val_scalar_plain("foo");     ___
-       ps._add_val_scalar_plain("bar");     ___
-       ps._add_val_scalar_plain("baz");     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_seq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_seq_val_block(st_seq);)
+    ___(ps._add_val_scalar_plain("foo");)
+    ___(ps._add_val_scalar_plain("bar");)
+    ___(ps._add_val_scalar_plain("baz");)
+    ___(ps._end_map(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
 
 PSTEST(MapMapFlow,
-       "{map1: {foo1: bar1,FOO1: BAR1},map2: {foo2: bar2,FOO2: BAR2}}\n",
+       "{map1: {foo1: bar1,FOO1: BAR1},map2: {foo2: bar2,FOO2: BAR2}}",
        R"(+STR
 +DOC
 +MAP {}
@@ -237,29 +334,30 @@ PSTEST(MapMapFlow,
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_map, st_mapmap;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_map_val_flow(st_map);     ___
-       ps._add_key_scalar_plain("map1");     ___
-       ps._begin_map_val_flow(st_mapmap);     ___
-       ps._add_key_scalar_plain("foo1");     ___
-       ps._add_val_scalar_plain("bar1");     ___
-       ps._add_key_scalar_plain("FOO1");     ___
-       ps._add_val_scalar_plain("BAR1");     ___
-       ps._end_map();     ___
-       ps._add_key_scalar_plain("map2");     ___
-       ps._begin_map_val_flow(st_mapmap);     ___
-       ps._add_key_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._add_key_scalar_plain("FOO2");     ___
-       ps._add_val_scalar_plain("BAR2");     ___
-       ps._end_map();     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_map, st_mapmap;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_map_val_flow(st_map);)
+    ___(ps._add_key_scalar_plain("map1");)
+    ___(ps._begin_map_val_flow(st_mapmap);)
+    ___(ps._add_key_scalar_plain("foo1");)
+    ___(ps._add_val_scalar_plain("bar1");)
+    ___(ps._add_key_scalar_plain("FOO1");)
+    ___(ps._add_val_scalar_plain("BAR1");)
+    ___(ps._end_map(st_map);)
+    ___(ps._add_key_scalar_plain("map2");)
+    ___(ps._begin_map_val_flow(st_mapmap);)
+    ___(ps._add_key_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._add_key_scalar_plain("FOO2");)
+    ___(ps._add_val_scalar_plain("BAR2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
@@ -292,35 +390,36 @@ map2:
 -MAP
 -DOC
 -STR
-)",
-       PsTree::state st_map, st_mapmap;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_map_val_block(st_map);     ___
-       ps._add_key_scalar_plain("map1");     ___
-       ps._begin_map_val_block(st_mapmap);     ___
-       ps._add_key_scalar_plain("foo1");     ___
-       ps._add_val_scalar_plain("bar1");     ___
-       ps._add_key_scalar_plain("FOO1");     ___
-       ps._add_val_scalar_plain("BAR1");     ___
-       ps._end_map();     ___
-       ps._add_key_scalar_plain("map2");     ___
-       ps._begin_map_val_block(st_mapmap);     ___
-       ps._add_key_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._add_key_scalar_plain("FOO2");     ___
-       ps._add_val_scalar_plain("BAR2");     ___
-       ps._end_map();     ___
-       ps._end_map();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_map, st_mapmap;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_map_val_block(st_map);)
+    ___(ps._add_key_scalar_plain("map1");)
+    ___(ps._begin_map_val_block(st_mapmap);)
+    ___(ps._add_key_scalar_plain("foo1");)
+    ___(ps._add_val_scalar_plain("bar1");)
+    ___(ps._add_key_scalar_plain("FOO1");)
+    ___(ps._add_val_scalar_plain("BAR1");)
+    ___(ps._end_map(st_map);)
+    ___(ps._add_key_scalar_plain("map2");)
+    ___(ps._begin_map_val_block(st_mapmap);)
+    ___(ps._add_key_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._add_key_scalar_plain("FOO2");)
+    ___(ps._add_val_scalar_plain("BAR2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
 
 PSTEST(SeqSeqFlow,
-       "[[foo1,bar1,baz1],[foo2,bar2,baz2]]\n",
+       "[[foo1,bar1,baz1],[foo2,bar2,baz2]]",
        R"(+STR
 +DOC
 +SEQ []
@@ -337,32 +436,32 @@ PSTEST(SeqSeqFlow,
 -SEQ
 -DOC
 -STR
-)",
-       PsTree::state st_seq, st_seqseq;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_seq_val_flow(st_seq);     ___
-       ps._begin_seq_val_flow(st_seqseq);     ___
-       ps._add_val_scalar_plain("foo1");     ___
-       ps._add_val_scalar_plain("bar1");     ___
-       ps._add_val_scalar_plain("baz1");     ___
-       ps._end_seq();     ___
-       ps._begin_seq_val_flow(st_seqseq);     ___
-       ps._add_val_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._add_val_scalar_plain("baz2");     ___
-       ps._end_seq();     ___
-       ps._end_seq();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_seq, st_seqseq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_seq_val_flow(st_seq);)
+    ___(ps._begin_seq_val_flow(st_seqseq);)
+    ___(ps._add_val_scalar_plain("foo1");)
+    ___(ps._add_val_scalar_plain("bar1");)
+    ___(ps._add_val_scalar_plain("baz1");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._begin_seq_val_flow(st_seqseq);)
+    ___(ps._add_val_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._add_val_scalar_plain("baz2");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 
 //-----------------------------------------------------------------------------
 
 PSTEST(SeqSeqBlock,
-       R"(
-- - foo1
+       R"(- - foo1
   - bar1
   - baz1
 - - foo2
@@ -385,25 +484,26 @@ PSTEST(SeqSeqBlock,
 -SEQ
 -DOC
 -STR
-)",
-       PsTree::state st_seq, st_seqseq;
-       ps._begin_stream();     ___
-       ps._begin_doc();     ___
-       ps._begin_seq_val_block(st_seq);     ___
-       ps._begin_seq_val_block(st_seqseq);     ___
-       ps._add_val_scalar_plain("foo1");     ___
-       ps._add_val_scalar_plain("bar1");     ___
-       ps._add_val_scalar_plain("baz1");     ___
-       ps._end_seq();     ___
-       ps._begin_seq_val_block(st_seqseq);     ___
-       ps._add_val_scalar_plain("foo2");     ___
-       ps._add_val_scalar_plain("bar2");     ___
-       ps._add_val_scalar_plain("baz2");     ___
-       ps._end_seq();     ___
-       ps._end_seq();     ___
-       ps._end_doc();     ___
-       ps._end_stream();     ___
-    )
+)")
+{
+    PsTree::state st_seq, st_seqseq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._begin_seq_val_block(st_seq);)
+    ___(ps._begin_seq_val_block(st_seqseq);)
+    ___(ps._add_val_scalar_plain("foo1");)
+    ___(ps._add_val_scalar_plain("bar1");)
+    ___(ps._add_val_scalar_plain("baz1");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._begin_seq_val_block(st_seqseq);)
+    ___(ps._add_val_scalar_plain("foo2");)
+    ___(ps._add_val_scalar_plain("bar2");)
+    ___(ps._add_val_scalar_plain("baz2");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
 
 } // namespace yml
 } // namespace c4

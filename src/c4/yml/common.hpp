@@ -245,8 +245,10 @@ struct _SubstrWriter
     void append(csubstr s)
     {
         C4_ASSERT(!s.overlaps(buf));
+        C4_ASSERT(s.str || !s.len);
         if(pos + s.len <= buf.len)
-            memcpy(buf.str + pos, s.str, s.len);
+            if(C4_LIKELY(s.len && s.str))
+                memcpy(buf.str + pos, s.str, s.len);
         pos += s.len;
     }
     void append(char c)

@@ -93,37 +93,24 @@ public:
 
 public:
 
-    void _push_(state_ref dst)
-    {
-        if constexpr (is_wtree)
-        {
-            dst.id = m_tree->append_child(m_parent->id);
-            dst.data = m_tree->_p(dst.id);
-            m_parent = &dst;
-        }
-    }
-    void _pop_(state_cref parent)
-    {
-        if constexpr (is_wtree)
-            m_parent = &parent;
-    }
     void _add_()
     {
-        if constexpr (is_wtree)
-        {
-            m_curr.id = m_tree->append_child(m_parent->id);
-            m_curr.data = m_tree->_p(m_curr.id);
-        }
+        m_curr.id = m_tree->append_child(m_parent->id);
+        m_curr.data = m_tree->_p(m_curr.id);
     }
-    void _add_(state_ref dst)
+    void _add_(state_ref next_parent)
     {
-        if constexpr (is_wtree)
-        {
-            dst = m_curr;
-            m_parent = &dst;
-            m_curr.id = m_tree->append_child(m_parent->id);
-            m_curr.data = m_tree->_p(m_curr.id);
-        }
+        next_parent = m_curr;
+        m_parent = &next_parent;
+        m_curr.id = m_tree->append_child(m_parent->id);
+        m_curr.data = m_tree->_p(m_curr.id);
+    }
+    void _end_(state_cref prev_parent)
+    {
+        m_parent = &prev_parent;
+        const size_t last = m_tree->last_child(m_parent->id);
+        if(m_curr.id != last)
+            m_tree->move(m_curr.id, m_parent->id, last);
     }
 
 public:
@@ -223,10 +210,12 @@ public:
             _add_(st);
         }
     }
-    void _end_map()
+    void _end_map(state_cref prev_parent)
     {
         if constexpr (is_events)
             _send_("-MAP\n");
+        else
+            _end_(prev_parent);
     }
 
 public:
@@ -257,7 +246,7 @@ public:
             C4_NOT_IMPLEMENTED();
         }
     }
-    void _begin_seq_val_flow(state_ref st)
+    void _begin_seq_val_flow(state_ref next_parent)
     {
         if constexpr (is_events)
         {
@@ -268,10 +257,10 @@ public:
         else
         {
             _enable_(SEQ|_WIP_STYLE_FLOW_SL);
-            _add_(st);
+            _add_(next_parent);
         }
     }
-    void _begin_seq_val_block(state_ref st)
+    void _begin_seq_val_block(state_ref next_parent)
     {
         if constexpr (is_events)
         {
@@ -282,13 +271,15 @@ public:
         else
         {
             _enable_(SEQ|_WIP_STYLE_BLOCK);
-            _add_(st);
+            _add_(next_parent);
         }
     }
-    void _end_seq()
+    void _end_seq(state_cref prev_parent)
     {
         if constexpr (is_events)
             _send_("-SEQ\n");
+        else
+            _end_(prev_parent);
     }
 
 public:
@@ -391,7 +382,7 @@ public:
         }
         else
         {
-            m_curr.data->m_key.scalar = unfiltered;
+            m_curr.data->m_val.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_LITERAL);
             _add_();
         }
@@ -417,7 +408,7 @@ public:
         }
         else
         {
-            m_curr.data->m_key.scalar = unfiltered;
+            m_curr.data->m_val.scalar = unfiltered;
             _enable_(VAL|_WIP_VAL_FOLDED);
             _add_();
         }
