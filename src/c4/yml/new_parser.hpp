@@ -154,6 +154,14 @@ public:
                 _enable_(STREAM);
                 _add_(next_parent);
             }
+            else if(!m_tree->is_stream(m_tree->root_id()))
+            {
+                m_tree->remove(m_curr.id);
+                m_tree->set_root_as_stream();
+                m_curr.id = m_tree->root_id();
+                m_curr.data = m_tree->_p(m_curr.id);
+                _add_(next_parent);
+            }
             _enable_(DOC);
         }
     }

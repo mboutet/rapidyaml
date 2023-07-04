@@ -194,9 +194,41 @@ PSTEST(DocScalarFolded,
 //-----------------------------------------------------------------------------
 
 PSTEST(DocStream,
-       "--- doc0\n\n--- doc1\n\n--- doc2\n\n",
+       "--- doc0\n\n--- 'doc1'\n\n--- \"doc2\"\n\n",
         R"(+STR
 +DOC ---
+=VAL :doc0
+-DOC
++DOC ---
+=VAL 'doc1
+-DOC
++DOC ---
+=VAL "doc2
+-DOC
+-STR
+)")
+{
+    PsTree::state st_stream;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc_expl(st_stream);)
+    ___(ps._add_val_scalar_plain("doc0");)
+    ___(ps._end_doc_expl(st_stream);)
+    ___(ps._begin_doc_expl(st_stream);)
+    ___(ps._add_val_scalar_squoted("doc1");)
+    ___(ps._end_doc_expl(st_stream);)
+    ___(ps._begin_doc_expl(st_stream);)
+    ___(ps._add_val_scalar_dquoted("doc2");)
+    ___(ps._end_doc_expl(st_stream);)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(DocStreamImplicitDocFirst,
+       "--- doc0\n\n--- doc1\n\n--- doc2\n\n",
+        R"(+STR
++DOC
 =VAL :doc0
 -DOC
 +DOC ---
@@ -210,9 +242,9 @@ PSTEST(DocStream,
 {
     PsTree::state st_stream;
     ___(ps._begin_stream();)
-    ___(ps._begin_doc_expl(st_stream);)
+    ___(ps._begin_doc();)
     ___(ps._add_val_scalar_plain("doc0");)
-    ___(ps._end_doc_expl(st_stream);)
+    ___(ps._end_doc();)
     ___(ps._begin_doc_expl(st_stream);)
     ___(ps._add_val_scalar_plain("doc1");)
     ___(ps._end_doc_expl(st_stream);)
