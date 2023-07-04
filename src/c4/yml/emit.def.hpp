@@ -177,8 +177,10 @@ void Emitter<Writer>::_write_doc(size_t id)
         if(!m_tree->is_root(id))
             this->Writer::_do_write(' ');
         _writev(id, 0);
+        this->Writer::_do_write('\n');
     }
-    this->Writer::_do_write('\n');
+    if(!m_tree->is_root(id))
+        this->Writer::_do_write('\n');
 }
 
 template<class Writer>
@@ -194,7 +196,8 @@ void Emitter<Writer>::_do_visit_flow_sl(size_t node, size_t ilevel)
         if(!m_tree->has_children(node))
             return;
     }
-    else if(m_tree->is_container(node))
+
+    if(m_tree->is_container(node))
     {
         RYML_ASSERT(m_tree->is_map(node) || m_tree->is_seq(node));
 

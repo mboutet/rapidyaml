@@ -119,7 +119,7 @@ public:
     {
         if constexpr (is_wtree)
         {
-            dst = *m_parent;
+            dst = m_curr;
             m_parent = &dst;
             m_curr.id = m_tree->append_child(m_parent->id);
             m_curr.data = m_tree->_p(m_curr.id);

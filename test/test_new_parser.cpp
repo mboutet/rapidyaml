@@ -32,6 +32,7 @@ void test_new_parser_events(std::string events)
     fn(ps);
     EXPECT_EQ(sink.result, events);
 }
+
 template<template<class> class Fn>
 void test_new_parser_wtree(std::string yaml)
 {
@@ -99,7 +100,7 @@ PSTEST(SimpleScalar,
 //-----------------------------------------------------------------------------
 
 PSTEST(SimpleMapFlow,
-       "{foo: bar, foo2: bar2}",
+       "{foo: bar,foo2: bar2}",
         R"(+STR
 +DOC
 +MAP {}
@@ -161,7 +162,7 @@ PSTEST(SimpleMapBlock,
 //-----------------------------------------------------------------------------
 
 PSTEST(SimpleSeqFlow,
-       "[foo, bar, baz]",
+       "[foo,bar,baz]",
         R"(+STR
 +DOC
 +SEQ []
@@ -207,6 +208,199 @@ PSTEST(SimpleSeqBlock,
        ps._add_val_scalar_plain("bar");     ___
        ps._add_val_scalar_plain("baz");     ___
        ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(MapMapFlow,
+       "{map1: {foo1: bar1,FOO1: BAR1},map2: {foo2: bar2,FOO2: BAR2}}\n",
+       R"(+STR
++DOC
++MAP {}
+=VAL :map1
++MAP {}
+=VAL :foo1
+=VAL :bar1
+=VAL :FOO1
+=VAL :BAR1
+-MAP
+=VAL :map2
++MAP {}
+=VAL :foo2
+=VAL :bar2
+=VAL :FOO2
+=VAL :BAR2
+-MAP
+-MAP
+-DOC
+-STR
+)",
+       PsTree::state st_map, st_mapmap;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_map_val_flow(st_map);     ___
+       ps._add_key_scalar_plain("map1");     ___
+       ps._begin_map_val_flow(st_mapmap);     ___
+       ps._add_key_scalar_plain("foo1");     ___
+       ps._add_val_scalar_plain("bar1");     ___
+       ps._add_key_scalar_plain("FOO1");     ___
+       ps._add_val_scalar_plain("BAR1");     ___
+       ps._end_map();     ___
+       ps._add_key_scalar_plain("map2");     ___
+       ps._begin_map_val_flow(st_mapmap);     ___
+       ps._add_key_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._add_key_scalar_plain("FOO2");     ___
+       ps._add_val_scalar_plain("BAR2");     ___
+       ps._end_map();     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(MapMapBlock,
+       R"(map1:
+  foo1: bar1
+  FOO1: BAR1
+map2:
+  foo2: bar2
+  FOO2: BAR2
+)",
+       R"(+STR
++DOC
++MAP
+=VAL :map1
++MAP
+=VAL :foo1
+=VAL :bar1
+=VAL :FOO1
+=VAL :BAR1
+-MAP
+=VAL :map2
++MAP
+=VAL :foo2
+=VAL :bar2
+=VAL :FOO2
+=VAL :BAR2
+-MAP
+-MAP
+-DOC
+-STR
+)",
+       PsTree::state st_map, st_mapmap;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_map_val_block(st_map);     ___
+       ps._add_key_scalar_plain("map1");     ___
+       ps._begin_map_val_block(st_mapmap);     ___
+       ps._add_key_scalar_plain("foo1");     ___
+       ps._add_val_scalar_plain("bar1");     ___
+       ps._add_key_scalar_plain("FOO1");     ___
+       ps._add_val_scalar_plain("BAR1");     ___
+       ps._end_map();     ___
+       ps._add_key_scalar_plain("map2");     ___
+       ps._begin_map_val_block(st_mapmap);     ___
+       ps._add_key_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._add_key_scalar_plain("FOO2");     ___
+       ps._add_val_scalar_plain("BAR2");     ___
+       ps._end_map();     ___
+       ps._end_map();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SeqSeqFlow,
+       "[[foo1,bar1,baz1],[foo2,bar2,baz2]]\n",
+       R"(+STR
++DOC
++SEQ []
++SEQ []
+=VAL :foo1
+=VAL :bar1
+=VAL :baz1
+-SEQ
++SEQ []
+=VAL :foo2
+=VAL :bar2
+=VAL :baz2
+-SEQ
+-SEQ
+-DOC
+-STR
+)",
+       PsTree::state st_seq, st_seqseq;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_seq_val_flow(st_seq);     ___
+       ps._begin_seq_val_flow(st_seqseq);     ___
+       ps._add_val_scalar_plain("foo1");     ___
+       ps._add_val_scalar_plain("bar1");     ___
+       ps._add_val_scalar_plain("baz1");     ___
+       ps._end_seq();     ___
+       ps._begin_seq_val_flow(st_seqseq);     ___
+       ps._add_val_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._add_val_scalar_plain("baz2");     ___
+       ps._end_seq();     ___
+       ps._end_seq();     ___
+       ps._end_doc();     ___
+       ps._end_stream();     ___
+    )
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(SeqSeqBlock,
+       R"(
+- - foo1
+  - bar1
+  - baz1
+- - foo2
+  - bar2
+  - baz2
+)",
+       R"(+STR
++DOC
++SEQ
++SEQ
+=VAL :foo1
+=VAL :bar1
+=VAL :baz1
+-SEQ
++SEQ
+=VAL :foo2
+=VAL :bar2
+=VAL :baz2
+-SEQ
+-SEQ
+-DOC
+-STR
+)",
+       PsTree::state st_seq, st_seqseq;
+       ps._begin_stream();     ___
+       ps._begin_doc();     ___
+       ps._begin_seq_val_block(st_seq);     ___
+       ps._begin_seq_val_block(st_seqseq);     ___
+       ps._add_val_scalar_plain("foo1");     ___
+       ps._add_val_scalar_plain("bar1");     ___
+       ps._add_val_scalar_plain("baz1");     ___
+       ps._end_seq();     ___
+       ps._begin_seq_val_block(st_seqseq);     ___
+       ps._add_val_scalar_plain("foo2");     ___
+       ps._add_val_scalar_plain("bar2");     ___
+       ps._add_val_scalar_plain("baz2");     ___
+       ps._end_seq();     ___
+       ps._end_seq();     ___
        ps._end_doc();     ___
        ps._end_stream();     ___
     )
