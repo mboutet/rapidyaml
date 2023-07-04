@@ -836,6 +836,12 @@ public:
     C4_ALWAYS_INLINE size_t prepend_child(size_t parent) { return insert_child(parent, NONE); }
     /** create and insert a node as the last child of @p parent */
     C4_ALWAYS_INLINE size_t  append_child(size_t parent) { return insert_child(parent, _p(parent)->m_last_child); }
+    C4_ALWAYS_INLINE size_t _append_child__unprotected(size_t parent)
+    {
+        size_t child = _claim();
+        _set_hierarchy(child, parent, _p(parent)->m_last_child);
+        return child;
+    }
 
 public:
 

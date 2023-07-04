@@ -95,14 +95,14 @@ public:
 
     void _add_()
     {
-        m_curr.id = m_tree->append_child(m_parent->id);
+        m_curr.id = m_tree->_append_child__unprotected(m_parent->id);
         m_curr.data = m_tree->_p(m_curr.id);
     }
     void _add_(state_ref next_parent)
     {
         next_parent = m_curr;
         m_parent = &next_parent;
-        m_curr.id = m_tree->append_child(m_parent->id);
+        m_curr.id = m_tree->_append_child__unprotected(m_parent->id);
         m_curr.data = m_tree->_p(m_curr.id);
     }
     void _end_(state_cref prev_parent)
@@ -141,17 +141,30 @@ public:
             _send_("-DOC\n");
     }
 
-    void _begin_doc_expl()
+    void _begin_doc_expl(state_ref next_parent)
     {
         if constexpr (is_events)
+        {
             _send_("+DOC ---\n");
+        }
         else
+        {
+            if(m_tree->is_root(m_curr.id))
+            {
+                _enable_(STREAM);
+                _add_(next_parent);
+            }
             _enable_(DOC);
+        }
     }
-    void _end_doc_expl()
+    void _end_doc_expl(state_cref prev_parent)
     {
         if constexpr (is_events)
             _send_("-DOC\n");
+        else
+        {
+            _end_(prev_parent);
+        }
     }
 
 public:
@@ -182,7 +195,7 @@ public:
             C4_NOT_IMPLEMENTED();
         }
     }
-    void _begin_map_val_flow(state_ref st)
+    void _begin_map_val_flow(state_ref next_parent)
     {
         if constexpr (is_events)
         {
@@ -193,10 +206,10 @@ public:
         else
         {
             _enable_(MAP|_WIP_STYLE_FLOW_SL);
-            _add_(st);
+            _add_(next_parent);
         }
     }
-    void _begin_map_val_block(state_ref st)
+    void _begin_map_val_block(state_ref next_parent)
     {
         if constexpr (is_events)
         {
@@ -207,7 +220,7 @@ public:
         else
         {
             _enable_(MAP|_WIP_STYLE_BLOCK);
-            _add_(st);
+            _add_(next_parent);
         }
     }
     void _end_map(state_cref prev_parent)
