@@ -168,6 +168,7 @@ void Emitter<Writer>::_write_doc(size_t id)
                 this->Writer::_do_write(' ');
             this->Writer::_do_write('&');
             this->Writer::_do_write(m_tree->val_anchor(id));
+            //this->Writer::_do_write('\n');
         }
     }
     else // docval
@@ -195,9 +196,20 @@ void Emitter<Writer>::_do_visit_flow_sl(size_t node, size_t ilevel)
         _write_doc(node);
         if(!m_tree->has_children(node))
             return;
+        else
+        {
+            if(m_tree->is_map(node))
+            {
+                this->Writer::_do_write('{');
+            }
+            else
+            {
+                _RYML_CB_ASSERT(m_tree->callbacks(), m_tree->is_seq(node));
+                this->Writer::_do_write('[');
+            }
+        }
     }
-
-    if(m_tree->is_container(node))
+    else if(m_tree->is_container(node))
     {
         RYML_ASSERT(m_tree->is_map(node) || m_tree->is_seq(node));
 

@@ -570,6 +570,226 @@ PSTEST(SeqSeqBlock,
     ___(ps._end_stream();)
 }
 
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorDocVal,
+       "&val a\n",
+       R"(+STR
++DOC
+=VAL &val :a
+-DOC
+-STR
+)")
+{
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("val");)
+    ___(ps._add_val_scalar_plain("a");)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorExplDocVal,
+       "--- &val a\n\n",
+       R"(+STR
++DOC ---
+=VAL &val :a
+-DOC
+-STR
+)")
+{
+    PsTree::state st_doc;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc_expl(st_doc);)
+    ___(ps._add_val_anchor("val");)
+    ___(ps._add_val_scalar_plain("a");)
+    ___(ps._end_doc_expl(st_doc);)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorSeq,
+       "&seq\n- &val1 val1\n- &val2 val2\n",
+       R"(+STR
++DOC
++SEQ &seq
+=VAL &val1 :val1
+=VAL &val2 :val2
+-SEQ
+-DOC
+-STR
+)")
+{
+    PsTree::state st_seq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("seq");)
+    ___(ps._begin_seq_val_block(st_seq);)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_val_anchor("val2");)
+    ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorMapBlock,
+       "&map\n&key1 key1: &val1 val1\n&key2 key2: &val2 val2\n",
+       R"(+STR
++DOC
++MAP &map
+=VAL &key1 :key1
+=VAL &val1 :val1
+=VAL &key2 :key2
+=VAL &val2 :val2
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_block(st_map);)
+    ___(ps._add_key_anchor("key1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_anchor("key2");)
+    ___(ps._add_key_scalar_plain("key2");)
+    ___(ps._add_val_anchor("val2");)
+    ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorMapFlow,
+       "&map\n{&key1 key1: &val1 val1,&key2 key2: &val2 val2}",
+       R"(+STR
++DOC
++MAP {} &map
+=VAL &key1 :key1
+=VAL &val1 :val1
+=VAL &key2 :key2
+=VAL &val2 :val2
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_flow(st_map);)
+    ___(ps._add_key_anchor("key1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_anchor("key2");)
+    ___(ps._add_key_scalar_plain("key2");)
+    ___(ps._add_val_anchor("val2");)
+    ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
+//-----------------------------------------------------------------------------
+
+PSTEST(AnchorMapMapBlock,
+       "&map\n&mapkey map: &mapval\n  &key1 key1: &val1 val1\n  &key2 key2: &val2 val2\n",
+       R"(+STR
++DOC
++MAP &map
+=VAL &mapkey :map
++MAP &mapval
+=VAL &key1 :key1
+=VAL &val1 :val1
+=VAL &key2 :key2
+=VAL &val2 :val2
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map, st_mapmap;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_block(st_map);)
+    ___(ps._add_key_anchor("mapkey");)
+    ___(ps._add_key_scalar_plain("map");)
+    ___(ps._add_val_anchor("mapval");)
+    ___(ps._begin_map_val_block(st_mapmap);)
+    ___(ps._add_key_anchor("key1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_anchor("key2");)
+    ___(ps._add_key_scalar_plain("key2");)
+    ___(ps._add_val_anchor("val2");)
+    ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+PSTEST(AnchorMapMapFlow,
+       "&map\n{&mapkey map: &mapval {&key1 key1: &val1 val1,&key2 key2: &val2 val2}}",
+       R"(+STR
++DOC
++MAP {} &map
+=VAL &mapkey :map
++MAP {} &mapval
+=VAL &key1 :key1
+=VAL &val1 :val1
+=VAL &key2 :key2
+=VAL &val2 :val2
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map, st_mapmap;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_flow(st_map);)
+    ___(ps._add_key_anchor("mapkey");)
+    ___(ps._add_key_scalar_plain("map");)
+    ___(ps._add_val_anchor("mapval");)
+    ___(ps._begin_map_val_flow(st_mapmap);)
+    ___(ps._add_key_anchor("key1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_anchor("key2");)
+    ___(ps._add_key_scalar_plain("key2");)
+    ___(ps._add_val_anchor("val2");)
+    ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+
 } // namespace yml
 } // namespace c4
 

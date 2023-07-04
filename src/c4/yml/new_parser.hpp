@@ -60,7 +60,7 @@ public:
     {
         if(m_curr.data->m_type.type & (KEYANCH|KEYREF))
         {
-            _send_('&');
+            _send_(" &");
             _send_(m_curr.data->m_key.anchor);
         }
     }
@@ -68,15 +68,16 @@ public:
     {
         if(m_curr.data->m_type.type & (VALANCH|VALREF))
         {
-            _send_('&');
+            _send_(" &");
             _send_(m_curr.data->m_val.anchor);
         }
     }
 
     void _send_key_scalar_(csubstr s, char type)
     {
-        _send_("=VAL ");
+        _send_("=VAL");
         _send_key_props_();
+        _send_(' ');
         _send_(type);
         _send_(s);
         _send_('\n');
@@ -84,8 +85,9 @@ public:
 
     void _send_val_scalar_(csubstr s, char type)
     {
-        _send_("=VAL ");
+        _send_("=VAL");
         _send_val_props_();
+        _send_(' ');
         _send_(type);
         _send_(s);
         _send_('\n');
