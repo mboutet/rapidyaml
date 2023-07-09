@@ -642,6 +642,31 @@ PSTEST(AnchorSeq,
     ___(ps._end_stream();)
 }
 
+PSTEST(AnchorSeqWithRef,
+       "&seq\n- &val1 val1\n- *val1\n",
+       R"(+STR
++DOC
++SEQ &seq
+=VAL &val1 :val1
+=ALI *val1
+-SEQ
+-DOC
+-STR
+)")
+{
+    PsTree::state st_seq;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("seq");)
+    ___(ps._begin_seq_val_block(st_seq);)
+    ___(ps._add_val_anchor("val1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_val_ref("*val1");)
+    ___(ps._end_seq(st_seq);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
 
 //-----------------------------------------------------------------------------
 
@@ -677,6 +702,36 @@ PSTEST(AnchorMapBlock,
     ___(ps._end_stream();)
 }
 
+PSTEST(AnchorMapBlockWithRef,
+       "&map\n&rkey1 key1: &rval1 val1\n*rkey1: *rval1\n",
+       R"(+STR
++DOC
++MAP &map
+=VAL &rkey1 :key1
+=VAL &rval1 :val1
+=ALI *rkey1
+=ALI *rval1
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_block(st_map);)
+    ___(ps._add_key_anchor("rkey1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("rval1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_ref("*rkey1");)
+    ___(ps._add_val_ref("*rval1");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
 
 //-----------------------------------------------------------------------------
 
@@ -707,6 +762,37 @@ PSTEST(AnchorMapFlow,
     ___(ps._add_key_scalar_plain("key2");)
     ___(ps._add_val_anchor("val2");)
     ___(ps._add_val_scalar_plain("val2");)
+    ___(ps._end_map(st_map);)
+    ___(ps._end_doc();)
+    ___(ps._end_stream();)
+}
+
+// WATCHOUT: see https://play.yaml.io/main/parser?input=Jm1hcAomcmtleTEgZm9vOiAmcnZhbDEgYmFyCipya2V5MSA6ICpydmFsMQ==
+PSTEST(AnchorMapFlowWithRef,
+       "&map\n{&rkey1 key1: &rval1 val1,*rkey1: *rval1}",
+       R"(+STR
++DOC
++MAP {} &map
+=VAL &rkey1 :key1
+=VAL &rval1 :val1
+=ALI *rkey1
+=ALI *rval1
+-MAP
+-DOC
+-STR
+)")
+{
+    PsTree::state st_map;
+    ___(ps._begin_stream();)
+    ___(ps._begin_doc();)
+    ___(ps._add_val_anchor("map");)
+    ___(ps._begin_map_val_flow(st_map);)
+    ___(ps._add_key_anchor("rkey1");)
+    ___(ps._add_key_scalar_plain("key1");)
+    ___(ps._add_val_anchor("rval1");)
+    ___(ps._add_val_scalar_plain("val1");)
+    ___(ps._add_key_ref("*rkey1");)
+    ___(ps._add_val_ref("*rval1");)
     ___(ps._end_map(st_map);)
     ___(ps._end_doc();)
     ___(ps._end_stream();)

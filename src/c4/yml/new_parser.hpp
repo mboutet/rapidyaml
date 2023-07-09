@@ -463,13 +463,36 @@ public:
 
     void _add_key_ref(csubstr ref)
     {
-        _enable_(KEYREF);
-        m_curr.data->m_key.anchor = ref;
+        RYML_ASSERT(ref.begins_with('*'));
+        if constexpr (is_events)
+        {
+            _send_("=ALI ");
+            _send_(ref);
+            _send_('\n');
+        }
+        else
+        {
+            _enable_(KEY|KEYREF);
+            m_curr.data->m_key.anchor = ref.sub(1);
+            m_curr.data->m_key.scalar = ref;
+        }
     }
     void _add_val_ref(csubstr ref)
     {
-        _enable_(VALREF);
-        m_curr.data->m_val.anchor = ref;
+        RYML_ASSERT(ref.begins_with('*'));
+        if constexpr (is_events)
+        {
+            _send_("=ALI ");
+            _send_(ref);
+            _send_('\n');
+        }
+        else
+        {
+            _enable_(VAL|VALREF);
+            m_curr.data->m_val.anchor = ref.sub(1);
+            m_curr.data->m_val.scalar = ref;
+            _add_();
+        }
     }
 };
 
