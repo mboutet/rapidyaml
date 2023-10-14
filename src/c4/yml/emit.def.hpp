@@ -154,6 +154,7 @@ void Emitter<Writer>::_write_doc(size_t id)
         RYML_ASSERT(m_tree->is_stream(m_tree->parent(id)));
         this->Writer::_do_write("---");
     }
+    //
     if(!m_tree->has_val(id)) // this is more frequent
     {
         if(m_tree->has_val_tag(id))
@@ -168,7 +169,8 @@ void Emitter<Writer>::_write_doc(size_t id)
                 this->Writer::_do_write(' ');
             this->Writer::_do_write('&');
             this->Writer::_do_write(m_tree->val_anchor(id));
-            //this->Writer::_do_write('\n');
+            if(m_tree->has_children(id) && m_tree->is_root(id))
+                this->Writer::_do_write('\n');
         }
     }
     else // docval
@@ -178,7 +180,8 @@ void Emitter<Writer>::_write_doc(size_t id)
         if(!m_tree->is_root(id))
             this->Writer::_do_write(' ');
         _writev(id, 0);
-        this->Writer::_do_write('\n');
+        if(m_tree->val(id).len && m_tree->is_root(id))
+            this->Writer::_do_write('\n');
     }
     if(!m_tree->is_root(id))
         this->Writer::_do_write('\n');

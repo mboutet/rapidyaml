@@ -68,10 +68,12 @@ struct name                                     \
                                                 \
 TEST(NewParser, name##_events)                  \
 {                                               \
+    SCOPED_TRACE(#name "_events");              \
     test_new_parser_events<name>(events);       \
 }                                               \
 TEST(NewParser, name##_wtree)                   \
 {                                               \
+    SCOPED_TRACE(#name "_tree");                \
     test_new_parser_wtree<name>(yaml);          \
 }                                               \
                                                 \
@@ -194,7 +196,7 @@ PSTEST(DocScalarFolded,
 //-----------------------------------------------------------------------------
 
 PSTEST(DocStream,
-       "--- doc0\n\n--- 'doc1'\n\n--- \"doc2\"\n\n",
+       "--- doc0\n--- 'doc1'\n--- \"doc2\"\n",
         R"(+STR
 +DOC ---
 =VAL :doc0
@@ -226,7 +228,7 @@ PSTEST(DocStream,
 //-----------------------------------------------------------------------------
 
 PSTEST(DocStreamImplicitDocFirst,
-       "--- doc0\n\n--- doc1\n\n--- doc2\n\n",
+       "--- doc0\n--- doc1\n--- doc2\n",
         R"(+STR
 +DOC
 =VAL :doc0
@@ -594,7 +596,7 @@ PSTEST(AnchorDocVal,
 //-----------------------------------------------------------------------------
 
 PSTEST(AnchorExplDocVal,
-       "--- &val a\n\n",
+       "--- &val a\n",
        R"(+STR
 +DOC ---
 =VAL &val :a
