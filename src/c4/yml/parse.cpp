@@ -134,18 +134,21 @@ size_t count_following_newlines(csubstr r, size_t *C4_RESTRICT i, size_t indenta
 
 //-----------------------------------------------------------------------------
 
-Parser::~Parser()
+template<class Sink>
+Parser_<Sink>::~Parser_()
 {
     _free();
     _clr();
 }
 
-Parser::Parser(Callbacks const& cb, ParserOptions opts)
+template<class Sink>
+Parser_<Sink>::Parser_(Callbacks const& cb, ParserOptions opts)
     : m_options(opts)
     , m_file()
     , m_buf()
     , m_root_id(NONE)
     , m_tree()
+    , m_parser_sink()
     , m_stack(cb)
     , m_state()
     , m_key_tag_indentation(0)
@@ -169,12 +172,14 @@ Parser::Parser(Callbacks const& cb, ParserOptions opts)
     m_state = &m_stack.top();
 }
 
-Parser::Parser(Parser &&that)
+template<class Sink>
+Parser_<Sink>::Parser_(Parser_<Sink> &&that)
     : m_options(that.m_options)
     , m_file(that.m_file)
     , m_buf(that.m_buf)
     , m_root_id(that.m_root_id)
     , m_tree(that.m_tree)
+    , m_parser_sink(that.m_parser_sink)
     , m_stack(std::move(that.m_stack))
     , m_state(&m_stack.top())
     , m_key_tag_indentation(that.m_key_tag_indentation)
@@ -197,12 +202,14 @@ Parser::Parser(Parser &&that)
     that._clr();
 }
 
-Parser::Parser(Parser const& that)
+template<class Sink>
+Parser_<Sink>::Parser_(Parser_<Sink> const& that)
     : m_options(that.m_options)
     , m_file(that.m_file)
     , m_buf(that.m_buf)
     , m_root_id(that.m_root_id)
     , m_tree(that.m_tree)
+    , m_parser_sink(that.m_parser_sink)
     , m_stack(that.m_stack)
     , m_state(&m_stack.top())
     , m_key_tag_indentation(that.m_key_tag_indentation)
@@ -235,7 +242,8 @@ Parser::Parser(Parser const& that)
     }
 }
 
-Parser& Parser::operator=(Parser &&that)
+template<class Sink>
+Parser_<Sink>& Parser_<Sink>::operator=(Parser_<Sink> &&that)
 {
     _free();
     m_options = (that.m_options);
@@ -243,6 +251,7 @@ Parser& Parser::operator=(Parser &&that)
     m_buf = (that.m_buf);
     m_root_id = (that.m_root_id);
     m_tree = (that.m_tree);
+    m_parser_sink = (that.m_parser_sink);
     m_stack = std::move(that.m_stack);
     m_state = (&m_stack.top());
     m_key_tag_indentation = (that.m_key_tag_indentation);
@@ -265,7 +274,8 @@ Parser& Parser::operator=(Parser &&that)
     return *this;
 }
 
-Parser& Parser::operator=(Parser const& that)
+template<class Sink>
+Parser_<Sink>& Parser_<Sink>::operator=(Parser_<Sink> const& that)
 {
     _free();
     m_options = (that.m_options);
@@ -273,6 +283,7 @@ Parser& Parser::operator=(Parser const& that)
     m_buf = (that.m_buf);
     m_root_id = (that.m_root_id);
     m_tree = (that.m_tree);
+    m_parser_sink = (that.m_parser_sink);
     m_stack = that.m_stack;
     m_state = &m_stack.top();
     m_key_tag_indentation = (that.m_key_tag_indentation);
@@ -298,13 +309,15 @@ Parser& Parser::operator=(Parser const& that)
     return *this;
 }
 
-void Parser::_clr()
+template<class Sink>
+void Parser_<Sink>::_clr()
 {
     m_options = {};
     m_file = {};
     m_buf = {};
     m_root_id = {};
     m_tree = {};
+    m_parser_sink = {};
     m_stack.clear();
     m_state = {};
     m_key_tag_indentation = {};
@@ -325,7 +338,8 @@ void Parser::_clr()
     m_newline_offsets_buf = {};
 }
 
-void Parser::_free()
+template<class Sink>
+void Parser_<Sink>::_free()
 {
     if(m_newline_offsets)
     {
@@ -345,7 +359,8 @@ void Parser::_free()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_reset()
+template<class Sink>
+void Parser_<Sink>::_reset()
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_stack.size() == 1);
     m_stack.clear();
@@ -372,8 +387,10 @@ void Parser::_reset()
 }
 
 //-----------------------------------------------------------------------------
+
+template<class Sink>
 template<class DumpFn>
-void Parser::_fmt_msg(DumpFn &&dumpfn) const
+void Parser_<Sink>::_fmt_msg(DumpFn &&dumpfn) const
 {
     auto const& lc = m_state->line_contents;
     csubstr contents = lc.stripped;
@@ -416,8 +433,9 @@ void Parser::_fmt_msg(DumpFn &&dumpfn) const
 
 
 //-----------------------------------------------------------------------------
+template<class Sink>
 template<class ...Args>
-void Parser::_err(csubstr fmt, Args const& C4_RESTRICT ...args) const
+void Parser_<Sink>::_err(csubstr fmt, Args const& C4_RESTRICT ...args) const
 {
     char errmsg[RYML_ERRMSG_SIZE];
     detail::_SubstrWriter writer(errmsg);
@@ -431,8 +449,9 @@ void Parser::_err(csubstr fmt, Args const& C4_RESTRICT ...args) const
 
 //-----------------------------------------------------------------------------
 #ifdef RYML_DBG
+template<class Sink>
 template<class ...Args>
-void Parser::_dbg(csubstr fmt, Args const& C4_RESTRICT ...args) const
+void Parser_<Sink>::_dbg(csubstr fmt, Args const& C4_RESTRICT ...args) const
 {
     auto dumpfn = [](csubstr s){ fwrite(s.str, 1, s.len, stdout); };
     _parse_dump(dumpfn, fmt, args...);
@@ -442,7 +461,8 @@ void Parser::_dbg(csubstr fmt, Args const& C4_RESTRICT ...args) const
 #endif
 
 //-----------------------------------------------------------------------------
-bool Parser::_finished_file() const
+template<class Sink>
+bool Parser_<Sink>::_finished_file() const
 {
     bool ret = m_state->pos.offset >= m_buf.len;
     if(ret)
@@ -453,13 +473,15 @@ bool Parser::_finished_file() const
 }
 
 //-----------------------------------------------------------------------------
-bool Parser::_finished_line() const
+template<class Sink>
+bool Parser_<Sink>::_finished_line() const
 {
     return m_state->line_contents.rem.empty();
 }
 
 //-----------------------------------------------------------------------------
-void Parser::parse_in_place(csubstr file, substr buf, Tree *t, size_t node_id)
+template<class Sink>
+void Parser_<Sink>::parse_in_place(csubstr file, substr buf, Tree *t, size_t node_id)
 {
     m_file = file;
     m_buf = buf;
@@ -479,13 +501,15 @@ void Parser::parse_in_place(csubstr file, substr buf, Tree *t, size_t node_id)
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_handle_finished_file()
+template<class Sink>
+void Parser_<Sink>::_handle_finished_file()
 {
     _end_stream();
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_handle_line()
+template<class Sink>
+void Parser_<Sink>::_handle_line()
 {
     _c4dbgq("\n-----------");
     _c4dbgt("handling line={}, offset={}B", m_state->pos.line, m_state->pos.offset);
@@ -528,7 +552,8 @@ void Parser::_handle_line()
 
 
 //-----------------------------------------------------------------------------
-bool Parser::_handle_unk()
+template<class Sink>
+bool Parser_<Sink>::_handle_unk()
 {
     _c4dbgp("handle_unk");
 
@@ -852,7 +877,8 @@ bool Parser::_handle_unk()
 
 
 //-----------------------------------------------------------------------------
-C4_ALWAYS_INLINE void Parser::_skipchars(char c)
+template<class Sink>
+C4_ALWAYS_INLINE void Parser_<Sink>::_skipchars(char c)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->line_contents.rem.begins_with(c));
     size_t pos = m_state->line_contents.rem.first_not_of(c);
@@ -862,8 +888,9 @@ C4_ALWAYS_INLINE void Parser::_skipchars(char c)
     _line_progressed(pos);
 }
 
+template<class Sink>
 template<size_t N>
-C4_ALWAYS_INLINE void Parser::_skipchars(const char (&chars)[N])
+C4_ALWAYS_INLINE void Parser_<Sink>::_skipchars(const char (&chars)[N])
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->line_contents.rem.begins_with_any(chars));
     size_t pos = m_state->line_contents.rem.first_not_of(chars);
@@ -875,7 +902,8 @@ C4_ALWAYS_INLINE void Parser::_skipchars(const char (&chars)[N])
 
 
 //-----------------------------------------------------------------------------
-bool Parser::_handle_seq_flow()
+template<class Sink>
+bool Parser_<Sink>::_handle_seq_flow()
 {
     _c4dbgpf("handle_seq_flow: node_id={} level={}", m_state->node_id, m_state->level);
     csubstr rem = m_state->line_contents.rem;
@@ -1048,7 +1076,8 @@ bool Parser::_handle_seq_flow()
 }
 
 //-----------------------------------------------------------------------------
-bool Parser::_handle_seq_blck()
+template<class Sink>
+bool Parser_<Sink>::_handle_seq_blck()
 {
     _c4dbgpf("handle_seq_impl: node_id={} level={}", m_state->node_id, m_state->level);
     csubstr rem = m_state->line_contents.rem;
@@ -1273,9 +1302,11 @@ bool Parser::_handle_seq_blck()
     return false;
 }
 
+
 //-----------------------------------------------------------------------------
 
-bool Parser::_rval_dash_start_or_continue_seq()
+template<class Sink>
+bool Parser_<Sink>::_rval_dash_start_or_continue_seq()
 {
     size_t ind = m_state->line_contents.current_col();
     _RYML_CB_ASSERT(m_stack.m_callbacks, ind >= m_state->indref);
@@ -1295,8 +1326,10 @@ bool Parser::_rval_dash_start_or_continue_seq()
     return true;
 }
 
+
 //-----------------------------------------------------------------------------
-bool Parser::_handle_map_flow()
+template<class Sink>
+bool Parser_<Sink>::_handle_map_flow()
 {
     // explicit flow, ie, inside {}, separated by commas
     _c4dbgpf("handle_map_flow: node_id={}  level={}", m_state->node_id, m_state->level);
@@ -1576,8 +1609,10 @@ bool Parser::_handle_map_flow()
     return false;
 }
 
+
 //-----------------------------------------------------------------------------
-bool Parser::_handle_map_blck()
+template<class Sink>
+bool Parser_<Sink>::_handle_map_blck()
 {
     _c4dbgpf("handle_map_blck: node_id={}  level={}", m_state->node_id, m_state->level);
     csubstr rem = m_state->line_contents.rem;
@@ -1855,7 +1890,8 @@ bool Parser::_handle_map_blck()
 
 
 //-----------------------------------------------------------------------------
-bool Parser::_handle_top()
+template<class Sink>
+bool Parser_<Sink>::_handle_top()
 {
     _c4dbgp("handle_top");
     csubstr rem = m_state->line_contents.rem;
@@ -1907,7 +1943,8 @@ bool Parser::_handle_top()
 
 //-----------------------------------------------------------------------------
 
-bool Parser::_handle_key_anchors_and_refs()
+template<class Sink>
+bool Parser_<Sink>::_handle_key_anchors_and_refs()
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, !has_any(RVAL));
     const csubstr rem = m_state->line_contents.rem;
@@ -1940,7 +1977,8 @@ bool Parser::_handle_key_anchors_and_refs()
     return false;
 }
 
-bool Parser::_handle_val_anchors_and_refs()
+template<class Sink>
+bool Parser_<Sink>::_handle_val_anchors_and_refs()
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, !has_any(RKEY));
     const csubstr rem = m_state->line_contents.rem;
@@ -1999,7 +2037,8 @@ bool Parser::_handle_val_anchors_and_refs()
     return false;
 }
 
-void Parser::_move_key_anchor_to_val_anchor()
+template<class Sink>
+void Parser_<Sink>::_move_key_anchor_to_val_anchor()
 {
     if(m_key_anchor.empty())
         return;
@@ -2012,7 +2051,8 @@ void Parser::_move_key_anchor_to_val_anchor()
     m_key_anchor_indentation = {};
 }
 
-void Parser::_move_val_anchor_to_key_anchor()
+template<class Sink>
+void Parser_<Sink>::_move_val_anchor_to_key_anchor()
 {
     if(m_val_anchor.empty())
         return;
@@ -2027,7 +2067,8 @@ void Parser::_move_val_anchor_to_key_anchor()
     m_val_anchor_indentation = {};
 }
 
-void Parser::_move_key_tag_to_val_tag()
+template<class Sink>
+void Parser_<Sink>::_move_key_tag_to_val_tag()
 {
     if(m_key_tag.empty())
         return;
@@ -2038,7 +2079,8 @@ void Parser::_move_key_tag_to_val_tag()
     m_key_tag_indentation = 0;
 }
 
-void Parser::_move_val_tag_to_key_tag()
+template<class Sink>
+void Parser_<Sink>::_move_val_tag_to_key_tag()
 {
     if(m_val_tag.empty())
         return;
@@ -2051,7 +2093,8 @@ void Parser::_move_val_tag_to_key_tag()
     m_val_tag_indentation = 0;
 }
 
-void Parser::_move_key_tag2_to_key_tag()
+template<class Sink>
+void Parser_<Sink>::_move_key_tag2_to_key_tag()
 {
     if(m_key_tag2.empty())
         return;
@@ -2065,7 +2108,8 @@ void Parser::_move_key_tag2_to_key_tag()
 
 //-----------------------------------------------------------------------------
 
-bool Parser::_handle_types()
+template<class Sink>
+bool Parser_<Sink>::_handle_types()
 {
     csubstr rem = m_state->line_contents.rem.triml(' ');
     csubstr t;
@@ -2240,7 +2284,8 @@ bool Parser::_handle_types()
 }
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_slurp_doc_scalar()
+template<class Sink>
+csubstr Parser_<Sink>::_slurp_doc_scalar()
 {
     csubstr s = m_state->line_contents.rem;
     size_t pos = m_state->pos.offset;
@@ -2316,7 +2361,8 @@ csubstr Parser::_slurp_doc_scalar()
 
 //-----------------------------------------------------------------------------
 
-bool Parser::_scan_scalar_seq_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
+template<class Sink>
+bool Parser_<Sink>::_scan_scalar_seq_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RSEQ));
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RVAL));
@@ -2396,7 +2442,8 @@ bool Parser::_scan_scalar_seq_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRIC
     return true;
 }
 
-bool Parser::_scan_scalar_map_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
+template<class Sink>
+bool Parser_<Sink>::_scan_scalar_map_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
 {
     _c4dbgp("_scan_scalar_map_blck");
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RMAP));
@@ -2541,7 +2588,8 @@ bool Parser::_scan_scalar_map_blck(csubstr *C4_RESTRICT scalar, bool *C4_RESTRIC
     return true;
 }
 
-bool Parser::_scan_scalar_seq_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
+template<class Sink>
+bool Parser_<Sink>::_scan_scalar_seq_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RSEQ));
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(FLOW));
@@ -2615,7 +2663,8 @@ bool Parser::_scan_scalar_seq_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRIC
     return true;
 }
 
-bool Parser::_scan_scalar_map_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
+template<class Sink>
+bool Parser_<Sink>::_scan_scalar_map_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RMAP));
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(FLOW));
@@ -2738,7 +2787,8 @@ bool Parser::_scan_scalar_map_flow(csubstr *C4_RESTRICT scalar, bool *C4_RESTRIC
     return true;
 }
 
-bool Parser::_scan_scalar_unk(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
+template<class Sink>
+bool Parser_<Sink>::_scan_scalar_unk(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks,  has_any(RUNK));
 
@@ -2836,7 +2886,8 @@ bool Parser::_scan_scalar_unk(csubstr *C4_RESTRICT scalar, bool *C4_RESTRICT quo
 
 //-----------------------------------------------------------------------------
 
-csubstr Parser::_extend_scanned_scalar(csubstr s)
+template<class Sink>
+csubstr Parser_<Sink>::_extend_scanned_scalar(csubstr s)
 {
     if(has_all(RMAP|RKEY|QMRK))
     {
@@ -2888,7 +2939,8 @@ csubstr Parser::_extend_scanned_scalar(csubstr s)
 
 //-----------------------------------------------------------------------------
 
-substr Parser::_scan_plain_scalar_flow(csubstr currscalar, csubstr peeked_line)
+template<class Sink>
+substr Parser_<Sink>::_scan_plain_scalar_flow(csubstr currscalar, csubstr peeked_line)
 {
     static constexpr const csubstr chars = "[]{}?#,";
     size_t pos = peeked_line.first_of(chars);
@@ -2946,7 +2998,8 @@ substr Parser::_scan_plain_scalar_flow(csubstr currscalar, csubstr peeked_line)
 
 //-----------------------------------------------------------------------------
 
-substr Parser::_scan_plain_scalar_blck(csubstr currscalar, csubstr peeked_line, size_t indentation)
+template<class Sink>
+substr Parser_<Sink>::_scan_plain_scalar_blck(csubstr currscalar, csubstr peeked_line, size_t indentation)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_buf.is_super(currscalar));
     // NOTE. there's a problem with _scan_to_next_nonempty_line(), as it counts newlines twice
@@ -3015,7 +3068,8 @@ substr Parser::_scan_plain_scalar_blck(csubstr currscalar, csubstr peeked_line, 
     return full;
 }
 
-substr Parser::_scan_complex_key(csubstr currscalar, csubstr peeked_line)
+template<class Sink>
+substr Parser_<Sink>::_scan_complex_key(csubstr currscalar, csubstr peeked_line)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_buf.is_super(currscalar));
     // NOTE. there's a problem with _scan_to_next_nonempty_line(), as it counts newlines twice
@@ -3086,7 +3140,8 @@ substr Parser::_scan_complex_key(csubstr currscalar, csubstr peeked_line)
 }
 
 //! scans to the next non-blank line starting with the given indentation
-csubstr Parser::_scan_to_next_nonempty_line(size_t indentation)
+template<class Sink>
+csubstr Parser_<Sink>::_scan_to_next_nonempty_line(size_t indentation)
 {
     csubstr next_peeked;
     while(true)
@@ -3126,7 +3181,8 @@ csubstr Parser::_scan_to_next_nonempty_line(size_t indentation)
 }
 
 // returns false when the file finished
-bool Parser::_advance_to_peeked()
+template<class Sink>
+bool Parser_<Sink>::_advance_to_peeked()
 {
     _line_progressed(m_state->line_contents.rem.len);
     _line_ended(); // advances to the peeked-at line, consuming all remaining (probably newline) characters on the current line
@@ -3163,7 +3219,8 @@ csubstr from_next_line(csubstr rem)
     return rem;
 }
 
-csubstr Parser::_peek_next_line(size_t pos) const
+template<class Sink>
+csubstr Parser_<Sink>::_peek_next_line(size_t pos) const
 {
     csubstr rem{}; // declare here because of the goto
     size_t nlpos{}; // declare here because of the goto
@@ -3192,7 +3249,8 @@ next_is_empty:
 
 
 //-----------------------------------------------------------------------------
-void Parser::LineContents::reset_with_next_line(csubstr buf, size_t offset)
+template<class Sink>
+void Parser_<Sink>::LineContents::reset_with_next_line(csubstr buf, size_t offset)
 {
     RYML_ASSERT(offset <= buf.len);
     char const* C4_RESTRICT b = &buf[offset];
@@ -3212,7 +3270,8 @@ void Parser::LineContents::reset_with_next_line(csubstr buf, size_t offset)
     reset(full_, stripped_);
 }
 
-void Parser::_scan_line()
+template<class Sink>
+void Parser_<Sink>::_scan_line()
 {
     if(m_state->pos.offset >= m_buf.len)
     {
@@ -3224,7 +3283,8 @@ void Parser::_scan_line()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_line_progressed(size_t ahead)
+template<class Sink>
+void Parser_<Sink>::_line_progressed(size_t ahead)
 {
     _c4dbgpf("line[{}] ({} cols) progressed by {}:  col {}-->{}   offset {}-->{}", m_state->pos.line, m_state->line_contents.full.len, ahead, m_state->pos.col, m_state->pos.col+ahead, m_state->pos.offset, m_state->pos.offset+ahead);
     m_state->pos.offset += ahead;
@@ -3233,7 +3293,8 @@ void Parser::_line_progressed(size_t ahead)
     m_state->line_contents.rem = m_state->line_contents.rem.sub(ahead);
 }
 
-void Parser::_line_ended()
+template<class Sink>
+void Parser_<Sink>::_line_ended()
 {
     _c4dbgpf("line[{}] ({} cols) ended! offset {}-->{}", m_state->pos.line, m_state->line_contents.full.len, m_state->pos.offset, m_state->pos.offset+m_state->line_contents.full.len - m_state->line_contents.stripped.len);
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->pos.col == m_state->line_contents.stripped.len+1);
@@ -3242,7 +3303,8 @@ void Parser::_line_ended()
     m_state->pos.col = 1;
 }
 
-void Parser::_line_ended_undo()
+template<class Sink>
+void Parser_<Sink>::_line_ended_undo()
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->pos.col == 1u);
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->pos.line > 0u);
@@ -3259,13 +3321,15 @@ void Parser::_line_ended_undo()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_set_indentation(size_t indentation)
+template<class Sink>
+void Parser_<Sink>::_set_indentation(size_t indentation)
 {
     m_state->indref = indentation;
     _c4dbgpf("state[{}]: saving indentation: {}", m_state-m_stack.begin(), m_state->indref);
 }
 
-void Parser::_save_indentation(size_t behind)
+template<class Sink>
+void Parser_<Sink>::_save_indentation(size_t behind)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state->line_contents.rem.begin() >= m_state->line_contents.full.begin());
     m_state->indref = static_cast<size_t>(m_state->line_contents.rem.begin() - m_state->line_contents.full.begin());
@@ -3274,7 +3338,8 @@ void Parser::_save_indentation(size_t behind)
     _c4dbgpf("state[{}]: saving indentation: {}", m_state-m_stack.begin(), m_state->indref);
 }
 
-bool Parser::_maybe_set_indentation_from_anchor_or_tag()
+template<class Sink>
+bool Parser_<Sink>::_maybe_set_indentation_from_anchor_or_tag()
 {
     if(m_key_anchor.not_empty())
     {
@@ -3293,7 +3358,8 @@ bool Parser::_maybe_set_indentation_from_anchor_or_tag()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_write_key_anchor(size_t node_id)
+template<class Sink>
+void Parser_<Sink>::_write_key_anchor(size_t node_id)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_tree->has_key(node_id));
     if( ! m_key_anchor.empty())
@@ -3335,7 +3401,8 @@ void Parser::_write_key_anchor(size_t node_id)
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_write_val_anchor(size_t node_id)
+template<class Sink>
+void Parser_<Sink>::_write_val_anchor(size_t node_id)
 {
     if( ! m_val_anchor.empty())
     {
@@ -3353,7 +3420,8 @@ void Parser::_write_val_anchor(size_t node_id)
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_push_level(bool explicit_flow_chars)
+template<class Sink>
+void Parser_<Sink>::_push_level(bool explicit_flow_chars)
 {
     _c4dbgpf("pushing level! currnode={}  currlevel={} stacksize={} stackcap={}", m_state->node_id, m_state->level, m_stack.size(), m_stack.capacity());
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_state == &m_stack.top());
@@ -3377,7 +3445,8 @@ void Parser::_push_level(bool explicit_flow_chars)
     _c4dbgpf("pushing level: now, currlevel={}", m_state->level);
 }
 
-void Parser::_pop_level()
+template<class Sink>
+void Parser_<Sink>::_pop_level()
 {
     _c4dbgpf("popping level! currnode={} currlevel={}", m_state->node_id, m_state->level);
     if(has_any(RMAP) || m_tree->is_map(m_state->node_id))
@@ -3409,7 +3478,8 @@ void Parser::_pop_level()
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_start_unk(bool /*as_child*/)
+template<class Sink>
+void Parser_<Sink>::_start_unk(bool /*as_child*/)
 {
     _c4dbgp("start_unk");
     _push_level();
@@ -3417,7 +3487,8 @@ void Parser::_start_unk(bool /*as_child*/)
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_start_doc(bool as_child)
+template<class Sink>
+void Parser_<Sink>::_start_doc(bool as_child)
 {
     _c4dbgpf("start_doc (as child={})", as_child);
     _RYML_CB_ASSERT(m_stack.m_callbacks, node(m_stack.bottom()) == node(m_root_id));
@@ -3453,7 +3524,8 @@ void Parser::_start_doc(bool as_child)
     rem_flags(NDOC);
 }
 
-void Parser::_stop_doc()
+template<class Sink>
+void Parser_<Sink>::_stop_doc()
 {
     size_t doc_node = m_state->node_id;
     _c4dbgpf("stop_doc[{}]", doc_node);
@@ -3466,7 +3538,8 @@ void Parser::_stop_doc()
     }
 }
 
-void Parser::_end_stream()
+template<class Sink>
+void Parser_<Sink>::_end_stream()
 {
     _c4dbgpf("end_stream, level={} node_id={}", m_state->level, m_state->node_id);
     _RYML_CB_ASSERT(m_stack.m_callbacks,  ! m_stack.empty());
@@ -3575,7 +3648,8 @@ void Parser::_end_stream()
     add_flags(NDOC);
 }
 
-void Parser::_start_new_doc(csubstr rem)
+template<class Sink>
+void Parser_<Sink>::_start_new_doc(csubstr rem)
 {
     _c4dbgp("_start_new_doc");
     _RYML_CB_ASSERT(m_stack.m_callbacks, rem.begins_with("---"));
@@ -3593,7 +3667,8 @@ void Parser::_start_new_doc(csubstr rem)
 
 
 //-----------------------------------------------------------------------------
-void Parser::_start_map(bool as_child)
+template<class Sink>
+void Parser_<Sink>::_start_map(bool as_child)
 {
     _c4dbgpf("start_map (as child={})", as_child);
     addrem_flags(RMAP|RVAL, RKEY|RUNK);
@@ -3665,7 +3740,8 @@ void Parser::_start_map(bool as_child)
     }
 }
 
-void Parser::_start_map_unk(bool as_child)
+template<class Sink>
+void Parser_<Sink>::_start_map_unk(bool as_child)
 {
     _c4dbgpf("start_map_unk (as child={})", as_child);
     if(!m_key_anchor_was_before)
@@ -3690,7 +3766,8 @@ void Parser::_start_map_unk(bool as_child)
     }
 }
 
-void Parser::_stop_map()
+template<class Sink>
+void Parser_<Sink>::_stop_map()
 {
     _c4dbgpf("stop_map[{}]", m_state->node_id);
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_tree->is_map(m_state->node_id));
@@ -3704,7 +3781,8 @@ void Parser::_stop_map()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_start_seq(bool as_child)
+template<class Sink>
+void Parser_<Sink>::_start_seq(bool as_child)
 {
     _c4dbgpf("start_seq (as child={})", as_child);
     if(has_all(RTOP|RUNK))
@@ -3776,7 +3854,8 @@ void Parser::_start_seq(bool as_child)
     }
 }
 
-void Parser::_stop_seq()
+template<class Sink>
+void Parser_<Sink>::_stop_seq()
 {
     _c4dbgp("stop_seq");
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_tree->is_seq(m_state->node_id));
@@ -3784,7 +3863,8 @@ void Parser::_stop_seq()
 
 
 //-----------------------------------------------------------------------------
-void Parser::_start_seqimap()
+template<class Sink>
+void Parser_<Sink>::_start_seqimap()
 {
     _c4dbgpf("start_seqimap at node={}. has_children={}", m_state->node_id, m_tree->has_children(m_state->node_id));
     _RYML_CB_ASSERT(m_stack.m_callbacks, has_all(RSEQ|FLOW));
@@ -3818,7 +3898,8 @@ void Parser::_start_seqimap()
     add_flags(RSEQIMAP|FLOW);
 }
 
-void Parser::_stop_seqimap()
+template<class Sink>
+void Parser_<Sink>::_stop_seqimap()
 {
     _c4dbgp("stop_seqimap");
     _RYML_CB_ASSERT(m_stack.m_callbacks, has_all(RSEQIMAP));
@@ -3826,7 +3907,8 @@ void Parser::_stop_seqimap()
 
 
 //-----------------------------------------------------------------------------
-NodeData* Parser::_append_val(csubstr val, flag_t quoted)
+template<class Sink>
+NodeData* Parser_<Sink>::_append_val(csubstr val, flag_t quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks,  ! has_all(SSCL));
     _RYML_CB_ASSERT(m_stack.m_callbacks, node(m_state) != nullptr);
@@ -3846,7 +3928,8 @@ NodeData* Parser::_append_val(csubstr val, flag_t quoted)
     return m_tree->get(nid);
 }
 
-NodeData* Parser::_append_key_val(csubstr val, flag_t val_quoted)
+template<class Sink>
+NodeData* Parser_<Sink>::_append_key_val(csubstr val, flag_t val_quoted)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_tree->is_map(m_state->node_id));
     type_bits additional_flags = 0;
@@ -3879,7 +3962,8 @@ NodeData* Parser::_append_key_val(csubstr val, flag_t val_quoted)
 
 
 //-----------------------------------------------------------------------------
-void Parser::_store_scalar(csubstr s, flag_t is_quoted)
+template<class Sink>
+void Parser_<Sink>::_store_scalar(csubstr s, flag_t is_quoted)
 {
     _c4dbgpf("state[{}]: storing scalar '{}' (flag: {}) (old scalar='{}')",
              m_state-m_stack.begin(), s, m_state->flags & SSCL, m_state->scalar);
@@ -3888,7 +3972,8 @@ void Parser::_store_scalar(csubstr s, flag_t is_quoted)
     m_state->scalar = s;
 }
 
-csubstr Parser::_consume_scalar()
+template<class Sink>
+csubstr Parser_<Sink>::_consume_scalar()
 {
     _c4dbgpf("state[{}]: consuming scalar '{}' (flag: {}))", m_state-m_stack.begin(), m_state->scalar, m_state->flags & SSCL);
     RYML_CHECK(m_state->flags & SSCL);
@@ -3898,7 +3983,8 @@ csubstr Parser::_consume_scalar()
     return s;
 }
 
-void Parser::_move_scalar_from_top()
+template<class Sink>
+void Parser_<Sink>::_move_scalar_from_top()
 {
     if(m_stack.size() < 2) return;
     State &prev = m_stack.top(1);
@@ -3917,7 +4003,8 @@ void Parser::_move_scalar_from_top()
 //-----------------------------------------------------------------------------
 /** @todo this function is a monster and needs love. Likely, it needs
  * to be split like _scan_scalar_*() */
-bool Parser::_handle_indentation()
+template<class Sink>
+bool Parser_<Sink>::_handle_indentation()
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, has_none(FLOW));
     if( ! _at_line_begin())
@@ -4088,7 +4175,8 @@ bool Parser::_handle_indentation()
 }
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_scan_comment()
+template<class Sink>
+csubstr Parser_<Sink>::_scan_comment()
 {
     csubstr s = m_state->line_contents.rem;
     _RYML_CB_ASSERT(m_stack.m_callbacks, s.begins_with('#'));
@@ -4102,7 +4190,8 @@ csubstr Parser::_scan_comment()
 }
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_scan_squot_scalar()
+template<class Sink>
+csubstr Parser_<Sink>::_scan_squot_scalar()
 {
     // quoted scalars can spread over multiple lines!
     // nice explanation here: http://yaml-multiline.info/
@@ -4206,7 +4295,8 @@ csubstr Parser::_scan_squot_scalar()
 }
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_scan_dquot_scalar()
+template<class Sink>
+csubstr Parser_<Sink>::_scan_dquot_scalar()
 {
     // quoted scalars can spread over multiple lines!
     // nice explanation here: http://yaml-multiline.info/
@@ -4307,7 +4397,8 @@ csubstr Parser::_scan_dquot_scalar()
 }
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_scan_block()
+template<class Sink>
+csubstr Parser_<Sink>::_scan_block()
 {
     // nice explanation here: http://yaml-multiline.info/
     csubstr s = m_state->line_contents.rem;
@@ -4517,8 +4608,9 @@ csubstr Parser::_scan_block()
 
 //-----------------------------------------------------------------------------
 
+template<class Sink>
 template<bool backslash_is_escape, bool keep_trailing_whitespace>
-bool Parser::_filter_nl(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos, size_t indentation)
+bool Parser_<Sink>::_filter_nl(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos, size_t indentation)
 {
     // a debugging scaffold:
     #if 0
@@ -4587,8 +4679,9 @@ bool Parser::_filter_nl(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos
 
 //-----------------------------------------------------------------------------
 
+template<class Sink>
 template<bool keep_trailing_whitespace>
-void Parser::_filter_ws(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos)
+void Parser_<Sink>::_filter_ws(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos)
 {
     // a debugging scaffold:
     #if 0
@@ -4629,7 +4722,8 @@ void Parser::_filter_ws(substr r, size_t *C4_RESTRICT i, size_t *C4_RESTRICT pos
 
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_filter_plain_scalar(substr s, size_t indentation)
+template<class Sink>
+csubstr Parser_<Sink>::_filter_plain_scalar(substr s, size_t indentation)
 {
     // a debugging scaffold:
     #if 0
@@ -4681,7 +4775,8 @@ csubstr Parser::_filter_plain_scalar(substr s, size_t indentation)
 
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_filter_squot_scalar(substr s)
+template<class Sink>
+csubstr Parser_<Sink>::_filter_squot_scalar(substr s)
 {
     // a debugging scaffold:
     #if 0
@@ -4747,7 +4842,8 @@ csubstr Parser::_filter_squot_scalar(substr s)
 
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_filter_dquot_scalar(substr s)
+template<class Sink>
+csubstr Parser_<Sink>::_filter_dquot_scalar(substr s)
 {
     // a debugging scaffold:
     #if 0
@@ -4967,7 +5063,8 @@ csubstr Parser::_filter_dquot_scalar(substr s)
 
 
 //-----------------------------------------------------------------------------
-bool Parser::_apply_chomp(substr buf, size_t *C4_RESTRICT pos, BlockChomp_e chomp)
+template<class Sink>
+bool Parser_<Sink>::_apply_chomp(substr buf, size_t *C4_RESTRICT pos, BlockChomp_e chomp)
 {
     substr trimmed = buf.first(*pos).trimr('\n');
     bool added_newline = false;
@@ -5006,7 +5103,8 @@ bool Parser::_apply_chomp(substr buf, size_t *C4_RESTRICT pos, BlockChomp_e chom
 
 
 //-----------------------------------------------------------------------------
-csubstr Parser::_filter_block_scalar(substr s, BlockStyle_e style, BlockChomp_e chomp, size_t indentation)
+template<class Sink>
+csubstr Parser_<Sink>::_filter_block_scalar(substr s, BlockStyle_e style, BlockChomp_e chomp, size_t indentation)
 {
     // a debugging scaffold:
     #if 0
@@ -5334,13 +5432,15 @@ csubstr Parser::_filter_block_scalar(substr s, BlockStyle_e style, BlockChomp_e 
 }
 
 //-----------------------------------------------------------------------------
-size_t Parser::_count_nlines(csubstr src)
+template<class Sink>
+size_t Parser_<Sink>::_count_nlines(csubstr src)
 {
     return 1 + src.count('\n');
 }
 
 //-----------------------------------------------------------------------------
-void Parser::_handle_directive(csubstr directive_)
+template<class Sink>
+void Parser_<Sink>::_handle_directive(csubstr directive_)
 {
     csubstr directive = directive_;
     if(directive.begins_with("%TAG"))
@@ -5377,7 +5477,8 @@ void Parser::_handle_directive(csubstr directive_)
 }
 
 //-----------------------------------------------------------------------------
-void Parser::set_flags(flag_t f, State * s)
+template<class Sink>
+void Parser_<Sink>::set_flags(flag_t f, State * s)
 {
 #ifdef RYML_DBG
     char buf1_[64], buf2_[64];
@@ -5388,7 +5489,8 @@ void Parser::set_flags(flag_t f, State * s)
     s->flags = f;
 }
 
-void Parser::add_flags(flag_t on, State * s)
+template<class Sink>
+void Parser_<Sink>::add_flags(flag_t on, State * s)
 {
 #ifdef RYML_DBG
     char buf1_[64], buf2_[64], buf3_[64];
@@ -5400,7 +5502,8 @@ void Parser::add_flags(flag_t on, State * s)
     s->flags |= on;
 }
 
-void Parser::addrem_flags(flag_t on, flag_t off, State * s)
+template<class Sink>
+void Parser_<Sink>::addrem_flags(flag_t on, flag_t off, State * s)
 {
 #ifdef RYML_DBG
     char buf1_[64], buf2_[64], buf3_[64], buf4_[64];
@@ -5414,7 +5517,8 @@ void Parser::addrem_flags(flag_t on, flag_t off, State * s)
     s->flags &= ~off;
 }
 
-void Parser::rem_flags(flag_t off, State * s)
+template<class Sink>
+void Parser_<Sink>::rem_flags(flag_t off, State * s)
 {
 #ifdef RYML_DBG
     char buf1_[64], buf2_[64], buf3_[64];
@@ -5428,7 +5532,8 @@ void Parser::rem_flags(flag_t off, State * s)
 
 //-----------------------------------------------------------------------------
 
-csubstr Parser::_prfl(substr buf, flag_t flags)
+template<class Sink>
+csubstr Parser_<Sink>::_prfl(substr buf, flag_t flags)
 {
     size_t pos = 0;
     bool gotone = false;
@@ -5476,7 +5581,8 @@ csubstr Parser::_prfl(substr buf, flag_t flags)
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 
-void Parser::_grow_filter_arena(size_t num_characters_needed)
+template<class Sink>
+void Parser_<Sink>::_grow_filter_arena(size_t num_characters_needed)
 {
     _c4dbgpf("grow: arena={} numchars={}", m_filter_arena.len, num_characters_needed);
     if(num_characters_needed <= m_filter_arena.len)
@@ -5491,7 +5597,8 @@ void Parser::_grow_filter_arena(size_t num_characters_needed)
     _resize_filter_arena(sz);
 }
 
-void Parser::_resize_filter_arena(size_t num_characters)
+template<class Sink>
+void Parser_<Sink>::_resize_filter_arena(size_t num_characters)
 {
     if(num_characters > m_filter_arena.len)
     {
@@ -5507,7 +5614,8 @@ void Parser::_resize_filter_arena(size_t num_characters)
     }
 }
 
-substr Parser::_finish_filter_arena(substr dst, size_t pos)
+template<class Sink>
+substr Parser_<Sink>::_finish_filter_arena(substr dst, size_t pos)
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, pos <= m_filter_arena.len);
     _RYML_CB_ASSERT(m_stack.m_callbacks, pos <= dst.len);
@@ -5520,19 +5628,22 @@ substr Parser::_finish_filter_arena(substr dst, size_t pos)
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 
-csubstr Parser::location_contents(Location const& loc) const
+template<class Sink>
+csubstr Parser_<Sink>::location_contents(Location const& loc) const
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, loc.offset < m_buf.len);
     return m_buf.sub(loc.offset);
 }
 
-Location Parser::location(ConstNodeRef node) const
+template<class Sink>
+Location Parser_<Sink>::location(ConstNodeRef node) const
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, node.valid());
     return location(*node.tree(), node.id());
 }
 
-Location Parser::location(Tree const& tree, size_t node) const
+template<class Sink>
+Location Parser_<Sink>::location(Tree const& tree, size_t node) const
 {
     // try hard to avoid getting the location from a null string.
     Location loc;
@@ -5541,7 +5652,8 @@ Location Parser::location(Tree const& tree, size_t node) const
     return val_location(m_buf.str);
 }
 
-bool Parser::_location_from_node(Tree const& tree, size_t node, Location *C4_RESTRICT loc, size_t level) const
+template<class Sink>
+bool Parser_<Sink>::_location_from_node(Tree const& tree, size_t node, Location *C4_RESTRICT loc, size_t level) const
 {
     if(tree.has_key(node))
     {
@@ -5607,7 +5719,8 @@ bool Parser::_location_from_node(Tree const& tree, size_t node, Location *C4_RES
     return false;
 }
 
-bool Parser::_location_from_cont(Tree const& tree, size_t node, Location *C4_RESTRICT loc) const
+template<class Sink>
+bool Parser_<Sink>::_location_from_cont(Tree const& tree, size_t node, Location *C4_RESTRICT loc) const
 {
     _RYML_CB_ASSERT(m_stack.m_callbacks, tree.is_container(node));
     if(!tree.is_stream(node))
@@ -5635,7 +5748,8 @@ bool Parser::_location_from_cont(Tree const& tree, size_t node, Location *C4_RES
 }
 
 
-Location Parser::val_location(const char *val) const
+template<class Sink>
+Location Parser_<Sink>::val_location(const char *val) const
 {
     if(C4_UNLIKELY(val == nullptr))
         return {m_file, 0, 0, 0};
@@ -5708,7 +5822,8 @@ Location Parser::val_location(const char *val) const
     return loc;
 }
 
-void Parser::_prepare_locations()
+template<class Sink>
+void Parser_<Sink>::_prepare_locations()
 {
     m_newline_offsets_buf = m_buf;
     size_t numnewlines = 1u + m_buf.count('\n');
@@ -5721,7 +5836,8 @@ void Parser::_prepare_locations()
     _RYML_CB_ASSERT(m_stack.m_callbacks, m_newline_offsets_size == numnewlines);
 }
 
-void Parser::_resize_locations(size_t numnewlines)
+template<class Sink>
+void Parser_<Sink>::_resize_locations(size_t numnewlines)
 {
     if(numnewlines > m_newline_offsets_capacity)
     {
@@ -5732,10 +5848,14 @@ void Parser::_resize_locations(size_t numnewlines)
     }
 }
 
-bool Parser::_locations_dirty() const
+template<class Sink>
+bool Parser_<Sink>::_locations_dirty() const
 {
     return !m_newline_offsets_size;
 }
+
+// FIXME instantiate the parser class.
+template class Parser_<ParserSinkTree>;
 
 } // namespace yml
 } // namespace c4

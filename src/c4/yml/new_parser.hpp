@@ -1,5 +1,5 @@
-#ifndef _C4_YML_PARSE_HPP_
-#define _C4_YML_PARSE_HPP_
+#ifndef _C4_YML_PARSER_SINK_HPP_
+#define _C4_YML_PARSER_SINK_HPP_
 
 #ifndef _C4_YML_TREE_HPP_
 #include "c4/yml/tree.hpp"
@@ -15,9 +15,17 @@ struct NewParserStackState
 };
 
 template<bool is_events, class Sink>
-struct NewParser // : public ParserEvents<NewParser, NewParserStackState>
+struct ParserSink;
+
+using ParserSinkTree = ParserSink<false, std::nullptr_t>;
+template<class Sink> using ParserSinkEvents = ParserSink<true, Sink>;
+
+
+template<bool is_events, class Sink>
+struct ParserSink // : public ParserEvents<NewParser, NewParserStackState>
 {
     static constexpr const bool is_wtree = !is_events;
+
     using state = NewParserStackState;
     using state_ref = state& C4_RESTRICT;
     using state_cref = state const& C4_RESTRICT;
@@ -31,7 +39,9 @@ struct NewParser // : public ParserEvents<NewParser, NewParserStackState>
 
 public:
 
-    NewParser(Tree *tree) : m_tree(tree), m_sink()
+    ParserSink() : m_tree(), m_sink(), m_parent(), m_curr(), m_evdata() {}
+
+    ParserSink(Tree *tree) : m_tree(tree), m_sink(), m_parent(), m_curr(), m_evdata()
     {
         if constexpr (is_wtree)
         {
@@ -41,7 +51,7 @@ public:
         }
     }
 
-    NewParser(Sink *sink) : m_tree(), m_sink(sink)
+    ParserSink(Sink *sink) : m_tree(), m_sink(sink), m_parent(), m_curr(), m_evdata()
     {
         if constexpr (is_events)
             m_curr.data = &m_evdata;
@@ -503,4 +513,4 @@ public:
 #   pragma warning(pop)
 #endif
 
-#endif /* _C4_YML_PARSE_HPP_ */
+#endif /* _C4_YML_PARSER_SINK_HPP_ */

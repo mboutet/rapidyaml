@@ -13,6 +13,10 @@
 #include "c4/yml/detail/stack.hpp"
 #endif
 
+#ifndef _C4_YML_PARSER_SINK_HPP_
+#include "c4/yml/new_parser.hpp"
+#endif
+
 #include <stdarg.h>
 
 #if defined(_MSC_VER)
@@ -33,7 +37,9 @@ private:
     } Flags_e;
 
     uint32_t flags = DEFAULTS;
+
 public:
+
     ParserOptions() = default;
 
     /** @name source location tracking */
@@ -57,21 +63,27 @@ public:
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
-class RYML_EXPORT Parser
+
+template<class Sink>
+class RYML_EXPORT Parser_;
+RYML_EXPORT using Parser = Parser_<ParserSinkTree>;
+
+template<class Sink>
+class RYML_EXPORT Parser_
 {
 public:
 
     /** @name construction and assignment */
     /** @{ */
 
-    Parser(Callbacks const& cb, ParserOptions opts={});
-    Parser(ParserOptions opts={}) : Parser(get_callbacks(), opts) {}
-    ~Parser();
+    Parser_(Callbacks const& cb, ParserOptions opts={});
+    Parser_(ParserOptions opts={}) : Parser_(get_callbacks(), opts) {}
+    ~Parser_();
 
-    Parser(Parser &&);
-    Parser(Parser const&);
-    Parser& operator=(Parser &&);
-    Parser& operator=(Parser const&);
+    Parser_(Parser_ &&);
+    Parser_(Parser_ const&);
+    Parser_& operator=(Parser_ &&);
+    Parser_& operator=(Parser_ const&);
 
     /** @} */
 
@@ -465,8 +477,11 @@ private:
         }
     };
 
+
     struct State
     {
+        using SinkState = typename Sink::state;
+
         flag_t       flags;
         size_t       level;
         size_t       node_id; // don't hold a pointer to the node as it will be relocated during tree resizes
@@ -476,8 +491,9 @@ private:
         Location     pos;
         LineContents line_contents;
         size_t       indref;
+        SinkState    sink_state;
 
-        State() : flags(), level(), node_id(), scalar(), scalar_col(), pos(), line_contents(), indref() {}
+        State() : flags(), level(), node_id(), scalar(), scalar_col(), pos(), line_contents(), indref(), sink_state() {}
 
         void reset(const char *file, size_t node_id_)
         {
@@ -559,8 +575,8 @@ private:
 
     void _free();
     void _clr();
-    void _cp(Parser const* that);
-    void _mv(Parser *that);
+    void _cp(Parser_ const* that);
+    void _mv(Parser_ *that);
 
 #ifdef RYML_DBG
     template<class ...Args> void _dbg(csubstr fmt, Args const& C4_RESTRICT ...args) const;
@@ -578,6 +594,7 @@ private:
 
     size_t  m_root_id;
     Tree *  m_tree;
+    Sink m_parser_sink;
 
     detail::stack<State> m_stack;
     State * m_state;
@@ -621,14 +638,14 @@ private:
  * Parser::parse_in_place() */
 /** @{ */
 
-inline Tree parse_in_place(                  substr yaml                         ) { Parser np; return np.parse_in_place({}      , yaml); } //!< parse in-situ a modifiable YAML source buffer.
-inline Tree parse_in_place(csubstr filename, substr yaml                         ) { Parser np; return np.parse_in_place(filename, yaml); } //!< parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
-inline void parse_in_place(                  substr yaml, Tree *t                ) { Parser np; np.parse_in_place({}      , yaml, t); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer
-inline void parse_in_place(csubstr filename, substr yaml, Tree *t                ) { Parser np; np.parse_in_place(filename, yaml, t); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
+inline Tree parse_in_place(                  substr yaml                         ) { Parser np; return np.parse_in_place({}      , yaml); }      //!< parse in-situ a modifiable YAML source buffer.
+inline Tree parse_in_place(csubstr filename, substr yaml                         ) { Parser np; return np.parse_in_place(filename, yaml); }      //!< parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
+inline void parse_in_place(                  substr yaml, Tree *t                ) { Parser np; np.parse_in_place({}      , yaml, t); }          //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer
+inline void parse_in_place(csubstr filename, substr yaml, Tree *t                ) { Parser np; np.parse_in_place(filename, yaml, t); }          //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
 inline void parse_in_place(                  substr yaml, Tree *t, size_t node_id) { Parser np; np.parse_in_place({}      , yaml, t, node_id); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer
 inline void parse_in_place(csubstr filename, substr yaml, Tree *t, size_t node_id) { Parser np; np.parse_in_place(filename, yaml, t, node_id); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
-inline void parse_in_place(                  substr yaml, NodeRef node           ) { Parser np; np.parse_in_place({}      , yaml, node); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer
-inline void parse_in_place(csubstr filename, substr yaml, NodeRef node           ) { Parser np; np.parse_in_place(filename, yaml, node); } //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
+inline void parse_in_place(                  substr yaml, NodeRef node           ) { Parser np; np.parse_in_place({}      , yaml, node); }       //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer
+inline void parse_in_place(csubstr filename, substr yaml, NodeRef node           ) { Parser np; np.parse_in_place(filename, yaml, node); }       //!< reusing the YAML tree, parse in-situ a modifiable YAML source buffer, providing a filename for error messages.
 
 RYML_DEPRECATED("use parse_in_place() instead") inline Tree parse(                  substr yaml                         ) { Parser np; return np.parse_in_place({}      , yaml); }
 RYML_DEPRECATED("use parse_in_place() instead") inline Tree parse(csubstr filename, substr yaml                         ) { Parser np; return np.parse_in_place(filename, yaml); }

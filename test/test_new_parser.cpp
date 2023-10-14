@@ -8,8 +8,6 @@
 #endif
 #include <gtest/gtest.h>
 
-#define RYML_DBG
-
 namespace c4 {
 namespace yml {
 
@@ -20,8 +18,8 @@ struct EventSink
     void operator() (char c) { result += c; }
 };
 
-using PsEvents = NewParser<true, EventSink>;
-using PsTree = NewParser<false, EventSink>;
+using PsEvents = ParserSink<true, EventSink>;
+using PsTree = ParserSink<false, EventSink>;
 
 template<template<class> class Fn>
 void test_new_parser_events(std::string const& expected)
@@ -54,6 +52,8 @@ void test_new_parser_wtree(std::string const& expected)
 //-----------------------------------------------------------------------------
 
 #define PSTEST(name, yaml, events)              \
+/* declare a function that will produce a       \
+   sequence of events */                        \
 template<class Ps>                              \
 void name##_impl(Ps &ps);                       \
                                                 \
@@ -97,6 +97,7 @@ void name##_impl(Ps &ps)
        }                                                                \
     } while(0);
 #endif
+
 
 //-----------------------------------------------------------------------------
 
